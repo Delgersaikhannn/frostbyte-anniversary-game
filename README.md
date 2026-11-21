@@ -6,7 +6,13 @@ Aliens crashed the birthday party: drag (or use arrow keys) to move, snowballs f
 - Green saucers take 1 hit, red saucers take 2 and shoot back.
 - Don't let aliens land, because each one that does costs a heart.
 - Pickups: 🎂 party cake = triple snowballs, ❄️ snowflake = frost shield, ❤️ = extra heart.
-- Every 4th wave the **mothership** shows up. Beat it to trigger the birthday celebration.
+- Every 4th wave a **boss** shows up. Beat it to trigger the birthday celebration:
+  1. **Mothership** (wave 4): sweeps side to side, fires spreads, drops saucers.
+  2. **Cake Snatcher** (wave 8): swoops in a figure-eight with the stolen cake, fires aimed
+     shots, and lines up a big beam on you (red dotted line = move!).
+  3. **Alien Overlord** (wave 12): shielded by orbiting orbs that block snowballs, fires ring
+     bursts, and adds a spiral stream below half HP.
+  From then on the Overlord keeps coming back (LV2, LV3, …) with more HP and faster attacks.
 - The sky changes every **100 points**, cycling through 7 themes (Midnight Snow, Aurora Sky,
   Cosmic Nebula, Synth Sunset, Alien World, Fireworks, Balloon Party) with a pixel-dither dissolve.
   Tweak `THEME_EVERY` in `index.html` to change the interval.
