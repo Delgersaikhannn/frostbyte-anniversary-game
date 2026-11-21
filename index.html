@@ -71,6 +71,9 @@ const P = {
   s: '#d6cff2', S: '#8f86c0', p: '#5b26a3', P: '#9b55f0',
   m: '#ff3fd0', M: '#ff9ae9', g: '#7dff6a', G: '#2fae4a',
   y: '#ffe14d', o: '#ff8a3d', r: '#ff4057', R: '#a3172f',
+  // Agent Delta's colors, taken from the original character art
+  Z: '#000000', F: '#ffd9a8', f: '#efcb8d', h: '#583300', b: '#6d4e21', e: '#858585',
+  l: '#d6d6d6', L: '#ebebeb', a: '#adadad', q: '#c2c2c2', W: '#ffffff', v: '#e5d9f2',
 };
 const CONFETTI = [P.m, P.c, P.y, P.g, P.P, P.w, P.o];
 
@@ -149,6 +152,27 @@ const SPR = {
   overA: sprite(OVERLORD_ROWS(false)),
   overB: sprite(OVERLORD_ROWS(true), { w: 'r' }),
   orb: sprite(['.PMP.', 'PMwMP', 'MwwwM', 'PMwMP', '.PMP.']),
+  // ally: Agent Delta from Planet Delta (pixel-for-pixel from the character art, 19x18)
+  ally: sprite([
+    '..KKK.KKKKKKKKKK...',
+    '.KFFFKKFFFFFffKKKK.',
+    'KKFhhhKFhhhhfhhKhK.',
+    'KFhhhKFFhKKhhKhKhhK',
+    '.KFhhKFFhKehFKhKhK.',
+    '.KFhKFFFhKKFFFhKK..',
+    '..KFKFFFFFFFKKbKK..',
+    '...KKFFFFFFFFffbK..',
+    '...KFFFFKFFFFFffbK.',
+    '...KKFFFKKKKKKKKKK.',
+    '....KKFFFFFFFfbbK..',
+    '...KllKFFFFFfbbK...',
+    '...KLLlKKFFfbbK....',
+    '..KKLLLllKKKKK.....',
+    '..KwLLLLlFFfbaK....',
+    '..KwwwLLLlllacwKK..',
+    '.KKwwwwLLLlcccwwK..',
+    '.KwwwwwwwLLlwwwwwK.',
+  ], { K: 'Z', c: 'q', w: 'W' }),
   cake: sprite(['...y...', '...w...', '.MMMMM.', 'MwMwMwM', 'mmmmmmm', 'mMMMMMm', 'mmmmmmm']),
   flake: sprite(['C..C..C', '.C.C.C.', '..CwC..', 'CCwwwCC', '..CwC..', '.C.C.C.', 'C..C..C']),
   heart: sprite(['.rr.rr.', 'rMrrrrr', 'rrrrrrr', 'rrrrrrr', '.rrrrr.', '..rrr..', '...r...']),
@@ -224,6 +248,9 @@ const SFX = {
   charge() { tone(180, 0.9, 'sawtooth', 0.03, 700); },
   beam() { noise(0.6, 0.06); tone(90, 0.7, 'square', 0.04); },
   ring() { tone(760, 0.16, 'square', 0.03, -480); },
+  pulse() { tone(300, 0.3, 'sine', 0.05, 900); },
+  ally() { tone(1500, 0.03, 'triangle', 0.012, -500); },
+  arrive() { [659, 880, 1175].forEach((f, i) => tone(f, 0.1, 'triangle', 0.04, 0, i * 0.08)); },
   over() { [523, 392, 330, 262].forEach((f, i) => tone(f, 0.2, 'triangle', 0.06, 0, i * 0.18)); },
   birthday() { // "Happy Birthday" (public domain)
     const G4 = 392, A4 = 440, B4 = 493.9, C5 = 523.3, D5 = 587.3;
@@ -452,11 +479,15 @@ function reset() {
   bullets = []; ebullets = []; enemies = []; pickups = []; parts = []; boss = null;
   Object.assign(G, { score: 0, newBest: false, lives: 3, wave: 1, kills: 0, waveKills: 0, spawn: 1.2, bossCount: 0, shake: 0, flash: 0, overT: 0 });
   setTheme(0); bgState.nameT = 0;
+  ally = null; allyShots = []; talk.q = []; talk.cur = null;
   banner('WAVE 1', 'PROTECT THE PARTY!', 2);
 }
 function banner(text, sub, t = 1.8, col = P.w) { G.banner = { text, sub, t, max: t, col }; }
 
-function startGame() { audioInit(); reset(); G.state = 'play'; SFX.start(); }
+function startGame() {
+  audioInit(); reset(); G.state = 'play'; SFX.start();
+  if (!G.storyShown) { G.storyShown = true; storyIntro(); } // story intro on the first game only
+}
 
 /* ---------------------------------------------------------------- spawning */
 function spawnEnemy() {
@@ -486,6 +517,9 @@ function spawnBoss() {
     rep ? ['OVERLORD IS BACK', 'LEVEL ' + (rep + 1) + ' - EVEN ANGRIER'] : ['ALIEN OVERLORD', 'BREAK ITS ORBS TO HIT IT']][type];
   banner(msg[0], msg[1], 2.4, P.r);
   SFX.alarm();
+  boss.wait = 9;        // hold off-screen while the intro dialogue plays (max 9s)
+  bossIntro(boss);
+  allyArrive();
 }
 function bossBox(b) {
   if (b.type === 0) return { x0: b.x - 14, x1: b.x + 14, y0: b.y, y1: b.y + 9 };
@@ -496,6 +530,7 @@ const orbPos = (b, o) => ({ x: b.x + Math.cos(o.a) * 18, y: b.y + 13 + Math.sin(
 
 function updateBoss(dt) {
   const b = boss, pl = player;
+  if (b.wait > 0) { b.wait -= dt; if (!talkBusy()) b.wait = 0; return; }
   if (b.hit > 0) b.hit -= dt;
   const homeY = b.type === 2 ? 21 : 20;
   if (!b.entered) {
@@ -529,7 +564,10 @@ function updateBoss(dt) {
       }
     }
     b.beamT -= dt;
-    if (b.beamT <= 0 && b.beam <= 0) { b.beam = 1.7; b.beamX = b.x; SFX.charge(); }
+    if (b.beamT <= 0 && b.beam <= 0) {
+      b.beam = 1.7; b.beamX = b.x; SFX.charge();
+      if (ally && ally.warned < 2) { ally.warned++; sayNow('ally', pick(['BEAM! MOVE, MOVE!', 'RED LINE! GET OUT OF THERE!']), 0.6); }
+    }
     if (b.beam > 0) {
       const was = b.beam; b.beam -= dt;
       if (was > 0.8 && b.beam <= 0.8) { SFX.beam(); G.shake = 0.2; }
@@ -569,29 +607,8 @@ function updateBoss(dt) {
   }
 
   // snowballs vs boss (the Overlord's orbs block them)
-  const box = bossBox(b);
   for (let j = bullets.length - 1; j >= 0; j--) {
-    const s = bullets[j];
-    if (b.type === 2) {
-      let blocked = false;
-      for (const o of b.orbs) {
-        if (o.hp <= 0) continue;
-        const p = orbPos(b, o);
-        if (Math.abs(s.x - p.x) < 4 && Math.abs(s.y - p.y) < 4) {
-          o.hp--; blocked = true;
-          if (o.hp <= 0) { o.dead = 7; G.score += 20; SFX.boom(); burst(p.x, p.y, [P.M, P.P, P.w], 14, 50, 0.4); }
-          else { SFX.hit(); burst(p.x, p.y, [P.M, P.w], 3, 25, 0.2); }
-          break;
-        }
-      }
-      if (blocked) { bullets.splice(j, 1); continue; }
-    }
-    if (s.x > box.x0 && s.x < box.x1 && s.y > box.y0 && s.y < box.y1) {
-      bullets.splice(j, 1); b.hp--; b.hit = 0.06; G.score += 2;
-      burst(s.x, s.y, [P.w, P.C, P.y], 3, 30, 0.25);
-      if (b.hp <= 0) { bossDefeated(); return; }
-      if (b.hp % 4 === 0) SFX.hit();
-    }
+    if (hitBoss(bullets[j])) { bullets.splice(j, 1); if (!boss) return; }
   }
 }
 function dropPickup(x, y, forced) {
@@ -640,7 +657,7 @@ function hurtPlayer(free) {
   if (G.lives <= 0) gameOver();
 }
 function gameOver() {
-  G.state = 'over'; G.overT = 0;
+  G.state = 'over'; G.overT = 0; talk.q = []; talk.cur = null;
   if (G.score > G.best) { G.best = G.score; G.newBest = true; saveBest(G.best); }
   SFX.over();
 }
@@ -668,6 +685,227 @@ function bossDefeated() {
   banner('HAPPY 2ND BIRTHDAY', 'FROSTBYTE! +' + 500 * G.bossCount, 3.5, P.y);
   SFX.boom(); SFX.birthday();
   G.wave++; G.waveKills = 0;
+  bossOutro(b);
+}
+
+/* ------------------------------------------------------------------ story */
+// Story lines play in a dialogue box while the game keeps running.
+// who: 'ally' (Agent Delta), 'boss' (current boss), 'narrator'.
+const ALLY_NAME = 'AGENT DELTA';
+const talk = { q: [], cur: null };
+function say(who, text, hold = 1.8, bt) { talk.q.push({ who, text: text.toUpperCase(), hold, bt: bt ?? (boss ? boss.type : 0) }); }
+function sayNow(who, text, hold = 0.8) { // urgent: cuts in front of everything
+  talk.q = []; talk.cur = null; say(who, text, hold);
+}
+const talkBusy = () => !!(talk.cur || talk.q.length);
+function updateTalk(dt) {
+  if (!talk.cur) {
+    if (!talk.q.length) return;
+    talk.cur = talk.q.shift(); talk.cur.n = 0; talk.cur.t = 0;
+  }
+  const c = talk.cur, before = c.n | 0;
+  c.n = Math.min(c.text.length, c.n + dt * 42);
+  if ((c.n | 0) !== before && (c.n | 0) % 3 === 0 && c.text[c.n | 0] !== ' ') {
+    if (c.who === 'ally') tone(rnd(760, 920), 0.03, 'square', 0.014);
+    else if (c.who === 'boss') tone(rnd(140, 200), 0.05, 'sawtooth', 0.02);
+    else tone(520, 0.02, 'triangle', 0.012);
+  }
+  if (c.n >= c.text.length && (c.t += dt) >= c.hold) talk.cur = null;
+}
+function wrap(s, max) {
+  const out = []; let line = '';
+  for (const w of s.split(' ')) {
+    if (line && (line + ' ' + w).length > max) { out.push(line); line = w; }
+    else line = line ? line + ' ' + w : w;
+  }
+  if (line) out.push(line);
+  return out;
+}
+const BOSS_PORTRAIT = () => [SPR.bossA, SPR.snatchA, SPR.overA];
+
+function storyIntro() {
+  say('narrator', 'TONIGHT FROSTBYTE TURNS 2. THE WHOLE TOWN CAME TO PARTY...', 1.4);
+  say('narrator', '...THEN THE SKY STARTED HUMMING. ALIENS! PROTECT THE CAKE!', 1.6);
+}
+function bossIntro(b) {
+  const t = b.type, first = !G.allyMet;
+  if (t === 0) {
+    say('boss', 'ATTENTION, EARTHLINGS. HAND OVER THE BIRTHDAY CAKE.', 1.4);
+    say('ally', first ? 'NOT TODAY! AGENT DELTA FROM PLANET DELTA, REPORTING IN!' : 'DELTA BACK ON DUTY!', 1.3);
+    if (first) say('ally', "I'LL COVER YOU FROM HERE. KEEP THOSE SNOWBALLS FLYING!", 1.4);
+  } else if (t === 1) {
+    say('boss', "MMM... BIRTHDAY CAKE. IT'S MINE NOW!", 1.3);
+    say('ally', "IT TOOK THE CAKE! SEE A RED LINE? THAT'S THE BEAM. MOVE!", 1.5);
+  } else if (!b.rep) {
+    say('boss', 'I AM THE OVERLORD. EVERY PARTY IN THIS GALAXY IS MINE.', 1.4);
+    say('ally', "THOSE ORBS ARE A SHIELD. I'LL POP THEM WITH DELTA PULSES. YOU HIT THE FACE!", 1.5);
+  } else {
+    say('boss', pick(['I HAVE RETURNED... STRONGER!', 'YOU CANNOT STOP THE OVERLORD!', 'LEVEL ' + (b.rep + 1) + '. YOUR CAKE IS DOOMED.']), 1.2);
+    say('ally', pick(["THIS GUY AGAIN? PLANET DELTA'S GOT YOUR BACK!", "SAME DANCE, FASTER MUSIC. LET'S GO!", 'DELTA SQUAD, ONE MORE TIME!']), 1.2);
+  }
+  G.allyMet = true;
+}
+function bossHalfway(b) {
+  if (b.type === 0) say('ally', "IT'S BREAKING APART! KEEP IT UP!", 1.1);
+  else if (b.type === 1) say('ally', 'ITS ENGINE IS SMOKING! ALMOST THERE!', 1.1);
+  else { say('boss', 'ENOUGH! FEEL MY FURY!', 0.9); say('ally', "IT'S MAD NOW. STAY LOW AND KEEP MOVING!", 1.1); }
+}
+function bossOutro(b) {
+  talk.q = []; talk.cur = null;
+  if (b.type === 0) { say('ally', "HA! THAT'S HOW WE PARTY ON PLANET DELTA.", 1.3); say('ally', "CALL ME WHEN THEY'RE BACK. DELTA OUT!", 1.2); }
+  else if (b.type === 1) { say('ally', 'CAKE RESCUED! NOBODY STEALS DESSERT ON MY WATCH.', 1.3); say('ally', 'DELTA OUT!', 1); }
+  else if (!b.rep) { say('boss', 'THIS... IS NOT... OVER...', 1.1, 2); say('ally', 'THE OVERLORD IS DOWN... FOR NOW. HAPPY 2ND BIRTHDAY, FROSTBYTE!', 1.6); }
+  else say('ally', pick(['AND STAY DOWN!', 'ANOTHER ONE FOR THE PARTY!', 'PLANET DELTA SALUTES YOU, FROSTBYTE!']), 1.3);
+  if (ally) ally.leave = 5;
+}
+
+/* ------------------------------------------------------------------- ally */
+// Agent Delta flies in for every boss fight on a delta hoverboard:
+// shoots at the boss, drops supplies, warns you about the beam, and
+// pops the Overlord's orbs with homing Delta Pulses.
+let ally = null, allyShots = [];
+function allyArrive() {
+  if (!ally) ally = { x: -14, y: 77, t: 0, fire: 1, drop: 9, pulse: 4, leave: 0, warned: 0, saidDrop: false };
+  ally.leave = 0; ally.warned = 0; ally.saidDrop = false;
+  SFX.arrive();
+}
+function hitBoss(s) { // shared by player snowballs and ally shots; returns true if the shot was used up
+  const b = boss;
+  if (b.type === 2) for (const o of b.orbs) {
+    if (o.hp <= 0) continue;
+    const p = orbPos(b, o);
+    if (Math.abs(s.x - p.x) < 4 && Math.abs(s.y - p.y) < 4) {
+      o.hp--;
+      if (o.hp <= 0) { o.dead = 7; G.score += 20; SFX.boom(); burst(p.x, p.y, [P.M, P.P, P.w], 14, 50, 0.4); }
+      else { SFX.hit(); burst(p.x, p.y, [P.M, P.w], 3, 25, 0.2); }
+      return true;
+    }
+  }
+  const box = bossBox(b);
+  if (s.x > box.x0 && s.x < box.x1 && s.y > box.y0 && s.y < box.y1) {
+    b.hp--; b.hit = 0.06; G.score += 2;
+    burst(s.x, s.y, [P.w, P.C, P.y], 3, 30, 0.25);
+    if (!b.half && b.hp < b.max / 2) { b.half = true; bossHalfway(b); }
+    if (b.hp <= 0) bossDefeated();
+    else if (b.hp % 4 === 0) SFX.hit();
+    return true;
+  }
+  return false;
+}
+function updateAlly(dt) {
+  if (ally) {
+    const a = ally; a.t += dt;
+    if (a.leave > 0 && (a.leave -= dt) <= 0) a.leave = -1;
+    if (a.leave < 0) { // flying home
+      a.x -= 80 * dt; a.y -= 25 * dt;
+      if (a.x < -24) ally = null;
+    } else {
+      // hover on the opposite side of the player, between the player and the boss
+      const tx = clamp(player.x < 80 ? player.x + 44 : player.x - 44, 14, 146);
+      a.x += clamp(tx - a.x, -60 * dt, 60 * dt);
+      a.y = 77 + Math.sin(a.t * 2.2) * 2; // between the boss and the dialogue box
+      if (boss && boss.entered) {
+        a.fire -= dt;
+        if (a.fire <= 0) {
+          a.fire = 0.42;
+          const dx = boss.x - a.x, dy = boss.y + 6 - a.y, d = Math.hypot(dx, dy) || 1;
+          allyShots.push({ x: a.x + 2, y: a.y - 2, vx: dx / d * 120, vy: dy / d * 120 });
+          SFX.ally();
+        }
+        a.drop -= dt;
+        if (a.drop <= 0) {
+          a.drop = rnd(11, 14);
+          dropPickup(a.x, a.y + 14, G.lives < 3 ? 'heart' : pick(['cake', 'flake']));
+          if (!a.saidDrop) { a.saidDrop = true; say('ally', 'SUPPLY DROP! GRAB IT!', 0.9); }
+        }
+        if (boss.type === 2) {
+          a.pulse -= dt;
+          if (a.pulse <= 0) {
+            const live = boss.orbs.filter(o => o.hp > 0);
+            if (live.length) {
+              allyShots.push({ x: a.x, y: a.y - 2, vx: 0, vy: -90, pulse: true, target: pick(live), life: 3 });
+              SFX.pulse(); a.pulse = 6.5;
+            } else a.pulse = 1;
+          }
+        }
+      }
+    }
+  }
+  for (let i = allyShots.length - 1; i >= 0; i--) {
+    const s = allyShots[i];
+    if (s.pulse) { // homing Delta Pulse: breaks an orb outright
+      s.life -= dt;
+      if (boss && s.target && s.target.hp > 0) {
+        const p = orbPos(boss, s.target), dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy) || 1;
+        s.vx = dx / d * 115; s.vy = dy / d * 115;
+        if (d < 5) {
+          s.target.hp = 0; s.target.dead = 7; G.score += 20;
+          burst(p.x, p.y, [P.y, P.C, P.w, P.M], 18, 60, 0.5); SFX.boom();
+          allyShots.splice(i, 1); continue;
+        }
+      }
+      if (s.life <= 0) { allyShots.splice(i, 1); continue; }
+    }
+    s.x += s.vx * dt; s.y += s.vy * dt;
+    if (s.y < -6 || s.y > H || s.x < -6 || s.x > W + 6) { allyShots.splice(i, 1); continue; }
+    if (s.pulse) continue;
+    let used = false;
+    for (let k = enemies.length - 1; k >= 0; k--) {
+      const e = enemies[k];
+      if (s.x > e.x - 7 && s.x < e.x + 7 && s.y > e.y - 2 && s.y < e.y + 8) {
+        e.hp--; e.hit = 0.08; used = true;
+        if (e.hp <= 0) killEnemy(e, k);
+        break;
+      }
+    }
+    if (!used && boss) used = hitBoss(s);
+    if (used) allyShots.splice(i, 1);
+  }
+}
+function drawAlly() {
+  const a = ally, x = Math.round(a.x), y = Math.round(a.y);
+  // delta hoverboard + thruster
+  ctx.fillStyle = P.o; ctx.fillRect(x - 10, y + 18, 21, 1);
+  ctx.fillStyle = P.y; ctx.fillRect(x - 8, y + 19, 17, 1); ctx.fillRect(x - 4, y + 20, 9, 1);
+  ctx.fillStyle = ((G.t * 20) | 0) % 2 ? P.y : P.o; ctx.fillRect(x - 1, y + 21, 3, 1 + (((G.t * 15) | 0) % 2));
+  ctx.drawImage(SPR.ally, x - 9, y);
+}
+function drawAllyShots() {
+  for (const s of allyShots) {
+    const x = Math.round(s.x), y = Math.round(s.y);
+    if (s.pulse) {
+      ctx.fillStyle = ((G.t * 20) | 0) % 2 ? P.y : P.C;
+      ctx.fillRect(x - 1, y - 2, 3, 5); ctx.fillRect(x - 2, y - 1, 5, 3);
+      ctx.fillStyle = P.w; ctx.fillRect(x, y, 1, 1);
+    } else { // little delta
+      ctx.fillStyle = P.y; ctx.fillRect(x, y - 1, 1, 1);
+      ctx.fillStyle = P.o; ctx.fillRect(x - 1, y, 3, 1);
+    }
+  }
+}
+function drawTalk() {
+  const c = talk.cur; if (!c) return;
+  const y0 = 103, h = 33;
+  const col = c.who === 'ally' ? P.y : c.who === 'boss' ? P.r : P.C;
+  ctx.fillStyle = 'rgba(11,11,20,0.84)'; ctx.fillRect(2, y0, 156, h);
+  ctx.fillStyle = col;
+  ctx.fillRect(3, y0, 154, 1); ctx.fillRect(3, y0 + h - 1, 154, 1); ctx.fillRect(2, y0 + 1, 1, h - 2); ctx.fillRect(157, y0 + 1, 1, h - 2);
+  let tx = 6, ty = y0 + 5, max = 37;
+  if (c.who !== 'narrator') {
+    ctx.fillStyle = c.who === 'ally' ? P.v : P.K; ctx.fillRect(5, y0 + 5, 21, 22);
+    ctx.save(); ctx.beginPath(); ctx.rect(5, y0 + 5, 21, 22); ctx.clip();
+    if (c.who === 'ally') ctx.drawImage(SPR.ally, 6, y0 + 8 + ((G.t * 6 | 0) % 2 && c.n < c.text.length ? -1 : 0));
+    else { const s = BOSS_PORTRAIT()[c.bt]; ctx.drawImage(s, Math.round(15.5 - s.width / 2), y0 + 16 - (s.height >> 1)); }
+    ctx.restore();
+    text(c.who === 'ally' ? ALLY_NAME : BOSS_NAMES[c.bt], 30, y0 + 4, col, 1);
+    tx = 30; ty = y0 + 12; max = 31;
+  }
+  let left = c.n | 0;
+  for (const line of wrap(c.text, max)) {
+    if (left <= 0) break;
+    text(line.slice(0, left), tx, ty, P.w, 1);
+    left -= line.length + 1; ty += 7;
+  }
 }
 
 /* ------------------------------------------------------------------ update */
@@ -688,6 +926,7 @@ function update(dt) {
   if (G.shake > 0) G.shake -= dt;
   if (G.flash > 0) G.flash -= dt;
   if (G.banner) { G.banner.t -= dt; if (G.banner.t <= 0) G.banner = null; }
+  updateTalk(dt);
 
   // player movement
   const pl = player;
@@ -765,6 +1004,7 @@ function update(dt) {
 
   // boss
   if (boss) updateBoss(dt);
+  updateAlly(dt);
 
   // enemy bullets
   for (let i = ebullets.length - 1; i >= 0; i--) {
@@ -931,6 +1171,8 @@ function drawBoss(f) {
 
 function drawPlay() {
   const f = ((G.t * 6) | 0) % 2;
+  // story dialogue sits behind the action so it never hides bullets
+  if (G.state === 'play') drawTalk();
   // pickups
   for (const k of pickups) {
     const s = SPR[k.type], yy = Math.round(k.y + Math.sin(k.t * 6));
@@ -945,8 +1187,10 @@ function drawPlay() {
   }
   // boss
   if (boss) drawBoss(f);
+  if (ally) drawAlly();
   // bullets
   for (const b of bullets) ctx.drawImage(SPR.snow, Math.round(b.x - 1), Math.round(b.y - 1));
+  drawAllyShots();
   for (const b of ebullets) {
     ctx.fillStyle = f ? P.m : P.M; ctx.fillRect(Math.round(b.x - 1), Math.round(b.y - 1), 2, 3);
     ctx.fillStyle = P.w; ctx.fillRect(Math.round(b.x - 1), Math.round(b.y), 1, 1);
@@ -1083,7 +1327,7 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // test hook: open with ?debug to poke at state from the console
-if (/[?&]debug\b/.test(location.search)) window.__fb = { G, get player() { return player; }, get boss() { return boss; }, get ebullets() { return ebullets; }, get bullets() { return bullets; }, startGame, spawnBoss, nextWave, gameOver, bossDefeated, bgState, setTheme, THEMES, drawBackground, updateBg, update, draw };
+if (/[?&]debug\b/.test(location.search)) window.__fb = { G, get player() { return player; }, get ally() { return ally; }, talk, say, get boss() { return boss; }, get ebullets() { return ebullets; }, get bullets() { return bullets; }, startGame, spawnBoss, nextWave, gameOver, bossDefeated, bgState, setTheme, THEMES, drawBackground, updateBg, update, draw };
 })();
 </script>
 </body>
