@@ -13,9 +13,9 @@ Aliens crashed the birthday party: drag (or use arrow keys) to move, snowballs f
   3. **Alien Overlord** (wave 12): shielded by orbiting orbs that block snowballs, fires ring
      bursts, and adds a spiral stream below half HP.
   From then on the Overlord keeps coming back (LV2, LV3, …) with more HP and faster attacks.
-- **Pick your Frostbyte** on the title screen: **Santa** or **Hoodie** (tap one, or ←/→ then
-  Space). Both are pixel-for-pixel from the Frostbyte reference art, and the choice is remembered.
-  Rename them in `CHARS`.
+- **Surprise Frostbyte**: every game you play as **Santa** or **Hoodie**, picked at random when
+  the game starts (Santa is the title-screen mascot). Both are pixel-for-pixel from the Frostbyte
+  reference art. Add more to `CHARS` and they join the draw.
 - **Art style**: every sprite follows the Frostbyte references: an outline in a dark tint of its
   own color, flat colors with a darker right/bottom shade, and a soft 1px drop shadow on the right.
   `sprite(rows, map, { trim, shade, outline, shadow })` applies these automatically.

@@ -260,7 +260,7 @@ const HOODIE_ROWS = [
   '....AAAAB..AAAAB.....',
 ];
 const HOODIE_MAP = { A: 'T', F: 'T', G: 'T', N: 'T', U: 'T', B: 'Q', O: 'Q', C: 'D', D: 'D', T: 'D', E: 'A', H: 'A', I: 'A', K: 'A', L: 'A', J: 'j', M: 'O', V: 'O', Q: 'i', R: 'i', S: 'W', P: '.' };
-// names shown on the character pick (rename freely)
+// playable Frostbytes: each new game picks one at random (the title screen shows Santa)
 const CHARS = [
   { name: 'SANTA', spr: sprite(SANTA_ROWS, SANTA_MAP, { trim: true }) },
   { name: 'HOODIE', spr: sprite(HOODIE_ROWS, HOODIE_MAP, { trim: true }) },
@@ -476,8 +476,6 @@ const SFX = {
 /* ------------------------------------------------------------- high score */
 function loadBest() { try { return parseInt(localStorage.getItem('fb2_best') || '0', 10) || 0; } catch (e) { return 0; } }
 function saveBest(v) { try { localStorage.setItem('fb2_best', String(v)); } catch (e) { /* storage blocked in embeds: fine */ } }
-function loadChar() { try { return (parseInt(localStorage.getItem('fb2_char') || '0', 10) || 0) % 2; } catch (e) { return 0; } }
-function saveChar(v) { try { localStorage.setItem('fb2_char', String(v)); } catch (e) { /* fine */ } }
 
 /* -------------------------------------------------------------- background */
 const stars = Array.from({ length: 46 }, () => ({ x: (Math.random() * W) | 0, y: (Math.random() * 118) | 0, p: Math.random() * 6.28, ci: (Math.random() * 3) | 0 }));
@@ -685,7 +683,7 @@ function drawBackground(t) {
 }
 
 /* -------------------------------------------------------------- game state */
-const G = { state: 'title', t: 0, score: 0, best: loadBest(), char: loadChar(), newBest: false, lives: 3, wave: 1, kills: 0, waveKills: 0,
+const G = { state: 'title', t: 0, score: 0, best: loadBest(), char: 0, newBest: false, lives: 3, wave: 1, kills: 0, waveKills: 0,
   spawn: 1, bossCount: 0, shake: 0, flash: 0, banner: null, overT: 0, prevState: 'play' };
 let player, bullets, ebullets, enemies, pickups, parts, boss;
 parts = [];
@@ -702,6 +700,7 @@ function reset() {
 function banner(text, sub, t = 1.8, col = P.w) { G.banner = { text, sub, t, max: t, col }; }
 
 function startGame() {
+  G.char = (Math.random() * CHARS.length) | 0; // surprise Frostbyte every game
   audioInit(); reset(); G.state = 'play'; SFX.start();
   if (!G.storyShown) { G.storyShown = true; storyIntro(); } // story intro on the first game only
 }
@@ -1325,19 +1324,9 @@ function drawTitle() {
   text('2ND ANNIVERSARY', 80, 37, P.M, 1, 'c');
   text('ALIEN DEFENSE', 80, 46, P.w, 2, 'c', P.n);
 
-  // character pick: tap a Frostbyte to play as it (or arrows + space)
-  CHARS.forEach((ch, i) => {
-    const sel = i === G.char, s = ch.spr, cx = CHAR_X[i];
-    const bob = sel ? Math.round(Math.sin(t * 4) * 2) : 0;
-    const top = 104 - s.height * 2 + bob;
-    drawPlayer(cx, top, 2, i);
-    if (sel) { // little arrow over the picked one
-      ctx.fillStyle = P.y;
-      const ay = 58 + ((t * 4 | 0) % 2);
-      ctx.fillRect(cx - 2, ay, 5, 1); ctx.fillRect(cx - 1, ay + 1, 3, 1); ctx.fillRect(cx, ay + 2, 1, 1);
-    }
-    text(ch.name, cx, 107, sel ? P.y : P.S, 1, 'c');
-  });
+  // Santa as the title mascot (which Frostbyte you play is picked at random on start)
+  const bob = Math.round(Math.sin(t * 4) * 2);
+  drawPlayer(80, 106 - CHARS[0].spr.height * 2 + bob, 2, 0);
   // saucers lurking at the sides
   const f = ((t * 6) | 0) % 2;
   ctx.drawImage(f ? SPR.ufo1a : SPR.ufo1b, 4, Math.round(68 + Math.sin(t * 2) * 3));
@@ -1346,12 +1335,10 @@ function drawTitle() {
   ctx.drawImage(SPR.cake, 17, 140);
   ctx.drawImage(SPR.cake, 134, 140);
 
-  if (((t * 2.2) | 0) % 2 === 0) text('TAP A FROSTBYTE TO PLAY', 80, 117, P.C, 1, 'c');
+  if (((t * 2.2) | 0) % 2 === 0) text('TAP OR SPACE TO PLAY', 80, 117, P.C, 1, 'c');
   text('DRAG / ARROWS. AUTO-FIRE.', 80, 126, P.S, 1, 'c');
   if (G.best > 0) text('BEST ' + G.best, 80, 136, P.y, 1, 'c');
 }
-const CHAR_X = [52, 108];
-function pickChar(i) { G.char = i; saveChar(i); }
 
 function drawBoss(f) {
   const b = boss, bx = Math.round(b.x), by = Math.round(b.y);
@@ -1499,10 +1486,7 @@ window.addEventListener('pointerdown', e => {
   try { cv.focus({ preventScroll: true }); } catch (_) {}
   const p = toLogical(e);
   if (inBtn(p, BTN.mute)) return; // handled on click
-  if (G.state === 'title') {
-    for (let i = 0; i < CHARS.length; i++) if (Math.abs(p.x - CHAR_X[i]) < 26 && p.y > 54 && p.y < 114) pickChar(i);
-    startGame(); return;
-  }
+  if (G.state === 'title') { startGame(); return; }
   if (G.state === 'paused') { G.state = 'play'; return; }
   if (G.state === 'over') return; // buttons on click
   ctrl = 'ptr';
@@ -1531,8 +1515,8 @@ window.addEventListener('keydown', e => {
   audioInit();
   const k = e.key;
   if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(k)) e.preventDefault();
-  if (k === 'ArrowLeft' || k === 'a' || k === 'A') { keys.left = true; ctrl = 'key'; if (G.state === 'title') pickChar(0); }
-  if (k === 'ArrowRight' || k === 'd' || k === 'D') { keys.right = true; ctrl = 'key'; if (G.state === 'title') pickChar(1); }
+  if (k === 'ArrowLeft' || k === 'a' || k === 'A') { keys.left = true; ctrl = 'key'; }
+  if (k === 'ArrowRight' || k === 'd' || k === 'D') { keys.right = true; ctrl = 'key'; }
   if (k === 'm' || k === 'M') muted = !muted;
   if (k === 'c' || k === 'C') {
     const off = crt.classList.toggle('off');
@@ -1569,7 +1553,7 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // test hook: open with ?debug to poke at state from the console
-if (/[?&]debug\b/.test(location.search)) window.__fb = { G, SPR, CHARS, pickChar, get player() { return player; }, get ally() { return ally; }, talk, say, get boss() { return boss; }, get ebullets() { return ebullets; }, get bullets() { return bullets; }, get pickups() { return pickups; }, dropPickup, startGame, spawnBoss, nextWave, gameOver, bossDefeated, bgState, setTheme, THEMES, drawBackground, updateBg, update, draw };
+if (/[?&]debug\b/.test(location.search)) window.__fb = { G, SPR, CHARS, get player() { return player; }, get ally() { return ally; }, talk, say, get boss() { return boss; }, get ebullets() { return ebullets; }, get bullets() { return bullets; }, get pickups() { return pickups; }, dropPickup, startGame, spawnBoss, nextWave, gameOver, bossDefeated, bgState, setTheme, THEMES, drawBackground, updateBg, update, draw };
 })();
 </script>
 </body>
