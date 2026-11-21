@@ -160,7 +160,8 @@ const CONFETTI = [P.m, P.c, P.y, P.g, P.P, P.w, P.o];
 const darken = (hex, f = 0.68) => '#' + [1, 3, 5].map(i => Math.round(parseInt(hex.slice(i, i + 2), 16) * f).toString(16).padStart(2, '0')).join('');
 const isDark = hex => parseInt(hex.slice(1, 3), 16) + parseInt(hex.slice(3, 5), 16) + parseInt(hex.slice(5, 7), 16) < 90;
 function sprite(rows, map, opt = {}) {
-  let g = rows.map(r => [...r].map(ch => { if (map && map[ch]) ch = map[ch]; return ch !== '.' && P[ch] ? P[ch] : null; }));
+  // map values can be palette keys or raw '#rrggbb' colors
+  let g = rows.map(r => [...r].map(ch => { if (map && map[ch]) ch = map[ch]; return ch === '.' ? null : ch[0] === '#' ? ch : P[ch] || null; }));
   let h = g.length, w = g[0].length;
   const keep = new Set(); // outline/shadow pixels stay put in the white hit-flash
   if (opt.trim) {
@@ -304,6 +305,51 @@ const SNATCH_ROWS = (lights) => [
 const PURPLE_OL = { Z: 'u' }, RED_OL = { g: 'o', G: 'R', P: 'r', p: 'R', Z: 'x' };
 const BOSS_STYLE = (ol) => ({ shade: true, outline: ol, shadow: SHADOW });
 
+// power-up drops. Gem colors are taken from https://www.frostbyte.art/assets/gem.png;
+// the frost shield and party cake reuse its shading layout in their own colors.
+const GEM_ROWS = [
+  '...aaaaa...',
+  '..abbbcca..',
+  '.abgdddeca.',
+  'abghdbddefa',
+  'abddbddhdea',
+  'abdbddbddea',
+  'abddhbddeia',
+  'abdbddddeia',
+  '.abeddeeia.',
+  '..accfcca..',
+  '...aaaaa...',
+];
+const GEM_PAL = { a: '#f2cdf7', g: '#efdefc', h: '#eb89fa', b: '#e84fff', d: '#c631e0', e: '#a21cba', c: '#821eb0', f: '#590794', i: '#420a7a' };
+const SHIELD_ROWS = [
+  '...aaaaa...',
+  '..abbbcca..',
+  '.abddgdeca.',
+  'abhgdgdgefa',
+  'abddgggdeca',
+  'abdgggggeca',
+  'abddgggdeia',
+  'abdgdgdgeia',
+  '.abddgdeia.',
+  '..accfcca..',
+  '...aaaaa...',
+];
+const SHIELD_PAL = { a: '#d4f7ff', g: '#f4feff', h: '#c8f6ff', b: '#9af2ff', d: '#2ec4e6', e: '#1a9cc4', c: '#1a7fa3', f: '#12507a', i: '#0d3a5c' };
+const CAKE_ROWS = [
+  '.....a.....',
+  '....aya....',
+  '....aoa....',
+  '....awa....',
+  '.aaaawaaaa.',
+  'abhbbbbbbca',
+  'abbcbbcbcca',
+  'agggggggkka',
+  'adddddddeia',
+  'adddddddeia',
+  '.aaaaaaaaa.',
+];
+const CAKE_PAL = { a: '#ffe0f5', y: '#ffe14d', o: '#ff8a3d', w: '#9af2ff', h: '#ffd6f5', b: '#ff9ae9', c: '#d957b8', g: '#fff3e0', k: '#e8cfae', d: '#ffb36b', e: '#d9773a', i: '#8a3f1e' };
+
 const SPR = {
   ufo1a: sprite(UFO_A, PURPLE_OL, { shadow: SHADOW }), ufo1b: sprite(UFO_B, PURPLE_OL, { shadow: SHADOW }),
   ufo2a: sprite(UFO_A, RED_OL, { shadow: SHADOW }), ufo2b: sprite(UFO_B, RED_OL, { shadow: SHADOW }),
@@ -338,9 +384,11 @@ const SPR = {
     '.KKwwwwLLLlcccwwK..',
     '.KwwwwwwwLLlwwwwwK.',
   ], { K: 'Z', c: 'q', w: 'W' }, { shadow: SHADOW }),
-  // pickups (9px, tinted outline + drop shadow)
-  cake: sprite(['....y....', '...ZoZ...', '...ZwZ...', '.ZZZZZZZ.', 'ZwMwMwMwZ', 'ZMmMmMmmZ', 'ZFFFFFFfZ', 'ZmmmmmmRZ', '.ZZZZZZZ.'], { Z: 'T' }, { shadow: SHADOW }),
-  flake: sprite(['....Z....', '...ZwZ...', '..ZwCCZ..', '.ZwCCCdZ.', 'ZwCCwCCdZ', '.ZCCCCdZ.', '..ZCCdZ..', '...ZdZ...', '....Z....'], { Z: 'U' }, { shadow: SHADOW }),
+  // drops: 11px, drawn in the style of frostbyte.art's gem (pale glowing outline,
+  // sparkle top-left, deep shading bottom-right)
+  gem: sprite(GEM_ROWS, GEM_PAL),
+  flake: sprite(SHIELD_ROWS, SHIELD_PAL),
+  cake: sprite(CAKE_ROWS, CAKE_PAL),
   heart: sprite(['.ZZZ.ZZZ.', 'ZrwrZrrrZ', 'ZrrrrrrRZ', 'ZrrrrrrRZ', '.ZrrrrRZ.', '..ZrrRZ..', '...ZRZ...', '....Z....'], { Z: 'x' }, { shadow: SHADOW }),
   heartS: sprite(['.ZZ.ZZ.', 'ZrwZrrZ', 'ZrrrrRZ', '.ZrrRZ.', '..ZRZ..', '...Z...'], { Z: 'x' }),
   heartE: sprite(['.ZZ.ZZ.', 'ZnnZnnZ', 'ZnnnnnZ', '.ZnnnZ.', '..ZnZ..', '...Z...'], { Z: 'T' }),
@@ -644,7 +692,7 @@ parts = [];
 
 function reset() {
   const ph = CHARS[G.char].spr.height;
-  player = { x: 80, y: 150 - ph, h: ph, tx: 80, fire: 0, triple: 0, shield: 0, inv: 1 };
+  player = { x: 80, y: 150 - ph, h: ph, tx: 80, fire: 0, triple: 0, shield: 0, rapid: 0, inv: 1 };
   bullets = []; ebullets = []; enemies = []; pickups = []; parts = []; boss = null;
   Object.assign(G, { score: 0, newBest: false, lives: 3, wave: 1, kills: 0, waveKills: 0, spawn: 1.2, bossCount: 0, shake: 0, flash: 0, overT: 0 });
   setTheme(0); bgState.nameT = 0;
@@ -784,7 +832,7 @@ function dropPickup(x, y, forced) {
   let type = forced;
   if (!type) {
     const r = Math.random();
-    type = r < 0.45 ? 'cake' : r < 0.75 ? 'flake' : 'heart';
+    type = r < 0.34 ? 'cake' : r < 0.58 ? 'flake' : r < 0.8 ? 'gem' : 'heart';
     if (type === 'heart' && G.lives >= 5) type = 'cake';
   }
   pickups.push({ x, y, type, t: 0 });
@@ -986,7 +1034,7 @@ function updateAlly(dt) {
         a.drop -= dt;
         if (a.drop <= 0) {
           a.drop = rnd(11, 14);
-          dropPickup(a.x, a.y + 14, G.lives < 3 ? 'heart' : pick(['cake', 'flake']));
+          dropPickup(a.x, a.y + 14, G.lives < 3 ? 'heart' : pick(['cake', 'flake', 'gem']));
           if (!a.saidDrop) { a.saidDrop = true; say('ally', 'SUPPLY DROP! GRAB IT!', 0.9); }
         }
         if (boss.type === 2) {
@@ -1111,12 +1159,13 @@ function update(dt) {
   pl.x = clamp(pl.x, 7, 153); pl.tx = clamp(pl.tx, 7, 153);
   if (pl.triple > 0) pl.triple -= dt;
   if (pl.shield > 0) pl.shield -= dt;
+  if (pl.rapid > 0) pl.rapid -= dt;
   if (pl.inv > 0) pl.inv -= dt;
 
   // auto-fire snowballs
   pl.fire -= dt;
   if (pl.fire <= 0) {
-    pl.fire = 0.2;
+    pl.fire = pl.rapid > 0 ? 0.09 : 0.2; // power gem: about twice as fast
     bullets.push({ x: pl.x, y: pl.y - 2, vx: 0, vy: -165 });
     if (pl.triple > 0) bullets.push({ x: pl.x - 3, y: pl.y, vx: -42, vy: -155 }, { x: pl.x + 3, y: pl.y, vx: 42, vy: -155 });
     SFX.shoot();
@@ -1195,6 +1244,7 @@ function update(dt) {
       burst(k.x, k.y + 3, CONFETTI, 18, 50);
       if (k.type === 'cake') { pl.triple = 9; banner('PARTY CAKE!', 'TRIPLE SNOWBALLS', 1.2, P.M); }
       else if (k.type === 'flake') { pl.shield = 10; banner('FROST SHIELD!', '', 1.2, P.C); }
+      else if (k.type === 'gem') { pl.rapid = 6; banner('POWER GEM!', 'RAPID FIRE', 1.2, '#e84fff'); }
       else { G.lives = Math.min(5, G.lives + 1); banner('+1 HEART', '', 1.2, P.r); }
       G.score += 15;
     }
@@ -1334,7 +1384,7 @@ function drawBoss(f) {
     let s = f ? SPR.snatchA : SPR.snatchB;
     if (b.hit > 0) s = s.white;
     ctx.drawImage(s, bx - 16, by - 1);
-    ctx.drawImage(SPR.cake, bx - 4, by + 12); // the stolen cake
+    ctx.drawImage(SPR.cake, bx - 5, by + 12); // the stolen cake
   } else {
     const back = [], front = [];
     for (const o of b.orbs) if (o.hp > 0) (Math.sin(o.a) < 0 ? back : front).push(orbPos(b, o));
@@ -1359,7 +1409,7 @@ function drawPlay() {
   for (const k of pickups) {
     const s = SPR[k.type], yy = Math.round(k.y + Math.sin(k.t * 6));
     if (((k.t * 10) | 0) % 6 === 0) { ctx.fillStyle = P.w; ctx.fillRect(k.x - 5, yy + 3, 1, 1); ctx.fillRect(k.x + 5, yy + 3, 1, 1); }
-    ctx.drawImage(s, Math.round(k.x - 4), yy);
+    ctx.drawImage(s, Math.round(k.x - (s.width >> 1)), yy);
   }
   // enemies
   for (const e of enemies) {
@@ -1375,7 +1425,7 @@ function drawPlay() {
   drawAllyShots();
   for (const b of ebullets) {
     ctx.fillStyle = P.Z; ctx.fillRect(Math.round(b.x - 2), Math.round(b.y - 2), 4, 5);
-    ctx.fillStyle = f ? P.m : P.M; ctx.fillRect(Math.round(b.x - 1), Math.round(b.y - 1), 2, 3);
+    ctx.fillStyle = f ? P.r : '#ff7a4a'; ctx.fillRect(Math.round(b.x - 1), Math.round(b.y - 1), 2, 3);
     ctx.fillStyle = P.w; ctx.fillRect(Math.round(b.x - 1), Math.round(b.y), 1, 1);
   }
   // player
@@ -1393,7 +1443,8 @@ function drawPlay() {
   }
   let by = 9;
   if (pl.triple > 0) { ctx.fillStyle = P.m; ctx.fillRect(2, by, Math.ceil(pl.triple / 9 * 24), 1); by += 2; }
-  if (pl.shield > 0) { ctx.fillStyle = P.C; ctx.fillRect(2, by, Math.ceil(pl.shield / 10 * 24), 1); }
+  if (pl.shield > 0) { ctx.fillStyle = P.C; ctx.fillRect(2, by, Math.ceil(pl.shield / 10 * 24), 1); by += 2; }
+  if (pl.rapid > 0) { ctx.fillStyle = '#e84fff'; ctx.fillRect(2, by, Math.ceil(pl.rapid / 6 * 24), 1); }
 
   // name of the sky we just moved to, written on the snow
   if (bgState.nameT > 0 && !(bgState.nameT < 0.5 && ((G.t * 10) | 0) % 2)) text(THEMES[bgState.cur].name, 80, 154, P.w, 1, 'c');
@@ -1518,7 +1569,7 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // test hook: open with ?debug to poke at state from the console
-if (/[?&]debug\b/.test(location.search)) window.__fb = { G, SPR, CHARS, pickChar, get player() { return player; }, get ally() { return ally; }, talk, say, get boss() { return boss; }, get ebullets() { return ebullets; }, get bullets() { return bullets; }, startGame, spawnBoss, nextWave, gameOver, bossDefeated, bgState, setTheme, THEMES, drawBackground, updateBg, update, draw };
+if (/[?&]debug\b/.test(location.search)) window.__fb = { G, SPR, CHARS, pickChar, get player() { return player; }, get ally() { return ally; }, talk, say, get boss() { return boss; }, get ebullets() { return ebullets; }, get bullets() { return bullets; }, get pickups() { return pickups; }, dropPickup, startGame, spawnBoss, nextWave, gameOver, bossDefeated, bgState, setTheme, THEMES, drawBackground, updateBg, update, draw };
 })();
 </script>
 </body>

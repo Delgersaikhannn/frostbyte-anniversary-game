@@ -5,7 +5,7 @@ Aliens crashed the birthday party: drag (or use arrow keys) to move, snowballs f
 
 - Green saucers take 1 hit, red saucers take 2 and shoot back.
 - Don't let aliens land, because each one that does costs a heart.
-- Pickups: 🎂 party cake = triple snowballs, ❄️ snowflake = frost shield, ❤️ = extra heart.
+- Pickups: 🎂 party cake = triple snowballs, ❄️ snowflake = frost shield, 💎 power gem = rapid fire for 6s, ❤️ = extra heart.
 - Every 4th wave a **boss** shows up. Beat it to trigger the birthday celebration:
   1. **Mothership** (wave 4): sweeps side to side, fires spreads, drops saucers.
   2. **Cake Snatcher** (wave 8): swoops in a figure-eight with the stolen cake, fires aimed
