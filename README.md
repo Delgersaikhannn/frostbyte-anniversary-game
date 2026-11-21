@@ -5,7 +5,7 @@ Aliens crashed the birthday party: drag (or use arrow keys) to move, snowballs f
 
 - Green saucers take 1 hit, red saucers take 2 and shoot back.
 - Don't let aliens land, because each one that does costs a heart.
-- Pickups: 🎂 party cake = triple snowballs, ❄️ snowflake = frost shield, ❤️ = extra heart.
+- Pickups: 🎂 party cake = triple snowballs, ❄️ snowflake = frost shield, 💎 power gem = rapid fire for 6s, ❤️ = extra heart.
 - Every 4th wave a **boss** shows up. Beat it to trigger the birthday celebration:
   1. **Mothership** (wave 4): sweeps side to side, fires spreads, drops saucers.
   2. **Cake Snatcher** (wave 8): swoops in a figure-eight with the stolen cake, fires aimed
@@ -13,9 +13,9 @@ Aliens crashed the birthday party: drag (or use arrow keys) to move, snowballs f
   3. **Alien Overlord** (wave 12): shielded by orbiting orbs that block snowballs, fires ring
      bursts, and adds a spiral stream below half HP.
   From then on the Overlord keeps coming back (LV2, LV3, …) with more HP and faster attacks.
-- **Pick your Frostbyte** on the title screen: **Santa** or **Hoodie** (tap one, or ←/→ then
-  Space). Both are pixel-for-pixel from the Frostbyte reference art, and the choice is remembered.
-  Rename them in `CHARS`.
+- **Surprise Frostbyte**: every game you play as **Santa** or **Hoodie**, picked at random when
+  the game starts (Santa is the title-screen mascot). Both are pixel-for-pixel from the Frostbyte
+  reference art. Add more to `CHARS` and they join the draw.
 - **Art style**: every sprite follows the Frostbyte references: an outline in a dark tint of its
   own color, flat colors with a darker right/bottom shade, and a soft 1px drop shadow on the right.
   `sprite(rows, map, { trim, shade, outline, shadow })` applies these automatically.
