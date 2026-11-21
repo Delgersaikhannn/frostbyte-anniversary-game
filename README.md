@@ -13,6 +13,12 @@ Aliens crashed the birthday party: drag (or use arrow keys) to move, snowballs f
   3. **Alien Overlord** (wave 12): shielded by orbiting orbs that block snowballs, fires ring
      bursts, and adds a spiral stream below half HP.
   From then on the Overlord keeps coming back (LV2, LV3, …) with more HP and faster attacks.
+- **Pick your Frostbyte** on the title screen: **Santa** or **Hoodie** (tap one, or ←/→ then
+  Space). Both are pixel-for-pixel from the Frostbyte reference art, and the choice is remembered.
+  Rename them in `CHARS`.
+- **Art style**: every sprite follows the Frostbyte references: an outline in a dark tint of its
+  own color, flat colors with a darker right/bottom shade, and a soft 1px drop shadow on the right.
+  `sprite(rows, map, { trim, shade, outline, shadow })` applies these automatically.
 - **Agent Delta**, your ally from Planet Delta, flies in on a delta hoverboard for every boss
   fight. They shoot at the boss, drop supplies (a heart when you're low), warn you when the
   Cake Snatcher lines up its beam, and fire homing Delta Pulses that pop the Overlord's orbs.
