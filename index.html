@@ -254,7 +254,7 @@ function noise(d, vol = 0.08) {
   s.buffer = b; g.gain.value = vol; s.connect(g); g.connect(AC.destination); s.start();
 }
 const SFX = {
-  shoot() { tone(1200, 0.04, 'triangle', 0.025, -600); },
+  shoot() { if (G.state === 'play') tone(1200, 0.04, 'triangle', 0.025, -600); },
   hit() { tone(320, 0.06, 'square', 0.035, -160); },
   boom() { noise(0.22, 0.06); tone(160, 0.18, 'triangle', 0.06, -100); },
   power() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.09, 'square', 0.035, 0, i * 0.06)); },
@@ -399,7 +399,9 @@ function hurtPlayer(free) {
   if (G.lives <= 0) gameOver();
 }
 function gameOver() {
+  if (G.state === 'over') return;
   G.state = 'over'; G.overT = 0;
+  bullets.length = 0; // no snowballs left hanging on the game over screen
   if (G.score > G.best) { G.best = G.score; G.newBest = true; saveBest(G.best); }
   SFX.over();
 }
@@ -504,6 +506,7 @@ function update(dt) {
       hurtPlayer(); continue;
     }
   }
+  if (G.state !== 'play') { updParts(dt); return; } // died this tick: stop the rest of gameplay
 
   // bullets vs enemies
   for (let i = enemies.length - 1; i >= 0; i--) {
@@ -554,6 +557,7 @@ function update(dt) {
     if (b.y > 152) { ebullets.splice(i, 1); continue; }
     if (Math.abs(b.x - pl.x) < 5 && b.y > pl.y + 2 && b.y < pl.y + 13) { ebullets.splice(i, 1); hurtPlayer(); }
   }
+  if (G.state !== 'play') { updParts(dt); return; }
 
   // pickups
   for (let i = pickups.length - 1; i >= 0; i--) {
