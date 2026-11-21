@@ -86,6 +86,20 @@
     .crt-glass { animation: none; }
     .crt-roll { display: none; }
   }
+
+  /* leaderboard name box on the game over screen; placed in game pixels via --px */
+  #nameIn {
+    position: absolute; z-index: 2; display: none; box-sizing: border-box;
+    left: calc(var(--px) * 22); top: calc(var(--px) * 50);
+    width: calc(var(--px) * 82); height: calc(var(--px) * 11);
+    margin: 0; padding: 0 calc(var(--px) * 2);
+    border: max(1px, calc(var(--px) * 1)) solid #9af2ff; border-radius: 0;
+    background: #15142a; color: #f4f6ff; caret-color: #ff9ae9;
+    font: bold max(16px, calc(var(--px) * 6)) / 1 ui-monospace, Consolas, 'Courier New', monospace;
+    letter-spacing: .05em; text-align: center; text-transform: uppercase; outline: none;
+  }
+  #nameIn::placeholder { color: #8f86c0; opacity: 1; }
+  #nameIn:focus { border-color: #ff9ae9; }
 </style>
 </head>
 <body>
@@ -95,6 +109,8 @@
   <div class="crt-fx crt-lines"></div>
   <div class="crt-fx crt-roll"></div>
   <div class="crt-fx crt-glass"></div>
+  <input id="nameIn" type="text" maxlength="16" placeholder="NAME OR X HANDLE" autocomplete="nickname"
+    autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-label="Your name for the leaderboard">
 </div>
 <script>
 (() => {
@@ -409,7 +425,7 @@ const FONT = {
   8: '111101111101111', 9: '111101111001110',
   '!': '010010010000010', '.': '000000000000010', ':': '000010000010000', '-': '000000111000000',
   '/': '001001010100100', '?': '110001010000010', '+': '000010111010000', "'": '010010000000000',
-  ',': '000000000010100', '#': '101111101111101', ' ': '000000000000000',
+  ',': '000000000010100', '#': '101111101111101', ' ': '000000000000000', '_': '000000000000111',
 };
 const textW = (s, sc = 1) => s.length * 4 * sc - sc;
 function drawStr(s, x, y, col, sc) {
@@ -474,6 +490,56 @@ const SFX = {
 };
 
 /* ------------------------------------------------------------- high score */
+/* ------------------------------------------------------------- leaderboard */
+// Scores go to /api/scores (a Vercel function that writes to Supabase).
+// When it can't be reached (local file, GitHub Pages copy) the board says OFFLINE.
+const LB_API = '/api/scores';
+const nameIn = document.getElementById('nameIn');
+const LB = { status: 'idle', top: [], sent: false, busy: false, rank: 0, msg: '', name: '' };
+try { nameIn.value = localStorage.getItem('fb2_name') || ''; } catch (e) { /* fine */ }
+const cleanName = s => String(s).trim().replace(/^@/, '').toUpperCase();
+nameIn.addEventListener('input', () => {
+  const v = nameIn.value.toUpperCase().replace(/[^A-Z0-9_@]/g, '').replace(/(?!^)@/g, '');
+  if (v !== nameIn.value) nameIn.value = v;
+  LB.msg = '';
+});
+
+async function lbOpen() {
+  Object.assign(LB, { status: 'loading', sent: false, busy: false, rank: 0, msg: '' });
+  try {
+    const r = await fetch(LB_API, { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    LB.top = (await r.json()).top || [];
+    LB.status = 'ready';
+  } catch (e) { LB.status = 'offline'; }
+}
+async function lbSubmit() {
+  if (LB.busy || LB.sent || LB.status !== 'ready' || G.score <= 0) return;
+  const name = cleanName(nameIn.value);
+  if (!/^[A-Z0-9_]{1,15}$/.test(name)) { LB.msg = name ? 'LETTERS, NUMBERS AND _ ONLY' : 'TYPE A NAME FIRST'; return; }
+  LB.busy = true; LB.msg = 'SAVING...';
+  try {
+    const r = await fetch(LB_API, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, score: G.score, wave: G.wave, secs: Math.max(1, Math.round(G.playT)) }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(r.status === 429 ? 'WAIT A FEW SECONDS' : r.status === 400 ? 'SCORE REJECTED' : 'TRY AGAIN');
+    Object.assign(LB, { sent: true, rank: j.rank, top: j.top || LB.top, name, msg: '' });
+    try { localStorage.setItem('fb2_name', name); } catch (e) { /* fine */ }
+    nameIn.blur();
+  } catch (e) {
+    LB.msg = 'COULD NOT SAVE: ' + (e.message && isNaN(e.message) ? e.message : 'TRY AGAIN');
+  }
+  LB.busy = false;
+}
+// the HTML name box only shows on the game over screen until the score is saved
+function syncNameBox() {
+  const show = G.state === 'over' && G.overT > 0.8 && LB.status === 'ready' && !LB.sent && G.score > 0;
+  const want = show ? 'block' : 'none';
+  if (nameIn.style.display !== want) { nameIn.style.display = want; if (!show) nameIn.blur(); }
+}
+
 function loadBest() { try { return parseInt(localStorage.getItem('fb2_best') || '0', 10) || 0; } catch (e) { return 0; } }
 function saveBest(v) { try { localStorage.setItem('fb2_best', String(v)); } catch (e) { /* storage blocked in embeds: fine */ } }
 
@@ -692,7 +758,7 @@ function reset() {
   const ph = CHARS[G.char].spr.height;
   player = { x: 80, y: 150 - ph, h: ph, tx: 80, fire: 0, triple: 0, shield: 0, rapid: 0, inv: 1 };
   bullets = []; ebullets = []; enemies = []; pickups = []; parts = []; boss = null;
-  Object.assign(G, { score: 0, newBest: false, lives: 3, wave: 1, kills: 0, waveKills: 0, spawn: 1.2, bossCount: 0, shake: 0, flash: 0, overT: 0 });
+  Object.assign(G, { score: 0, newBest: false, lives: 3, wave: 1, kills: 0, waveKills: 0, spawn: 1.2, bossCount: 0, shake: 0, flash: 0, overT: 0, playT: 0 });
   setTheme(0); bgState.nameT = 0;
   ally = null; allyShots = []; talk.q = []; talk.cur = null;
   banner('WAVE 1', 'PROTECT THE PARTY!', 2);
@@ -878,6 +944,7 @@ function gameOver() {
   bullets.length = 0; // no snowballs left hanging on the game over screen
   if (G.score > G.best) { G.best = G.score; G.newBest = true; saveBest(G.best); }
   SFX.over();
+  lbOpen();
 }
 function killEnemy(e, i) {
   enemies.splice(i, 1);
@@ -1141,6 +1208,7 @@ function update(dt) {
   if (G.state === 'paused') return;
   if (G.state === 'over') { G.overT += dt; if (G.newBest && Math.random() < 0.3) confetti(1, true); updParts(dt); return; }
 
+  G.playT += dt; // sent with leaderboard scores so the server can sanity-check them
   if (G.shake > 0) G.shake -= dt;
   if (G.flash > 0) G.flash -= dt;
   if (G.banner) { G.banner.t -= dt; if (G.banner.t <= 0) G.banner = null; }
@@ -1260,8 +1328,9 @@ function update(dt) {
 
 /* -------------------------------------------------------------------- draw */
 const BTN = {
-  retry: { x: 48, y: 96, w: 64, h: 13 },
-  share: { x: 36, y: 114, w: 88, h: 13 },
+  save: { x: 107, y: 50, w: 31, h: 11 },
+  retry: { x: 48, y: 112, w: 64, h: 12 },
+  share: { x: 36, y: 128, w: 88, h: 12 },
   mute: { x: 148, y: 151, w: 11, h: 9 },
 };
 function box(b, label, col) {
@@ -1450,17 +1519,35 @@ function drawPlay() {
 
 function drawOver() {
   ctx.fillStyle = 'rgba(11,11,20,0.78)'; ctx.fillRect(0, 0, W, H);
-  text('GAME OVER', 80, 22, P.m, 2, 'c', P.p);
-  text('THE ALIENS ATE THE CAKE', 80, 38, P.S, 1, 'c');
-  text('SCORE', 80, 52, P.S, 1, 'c');
-  text(String(G.score), 80, 60, P.w, 2, 'c', P.n);
-  if (G.newBest) { if (((G.t * 3) | 0) % 2 === 0) text('NEW BEST!', 80, 76, P.y, 1, 'c'); }
-  else text('BEST ' + G.best, 80, 76, P.y, 1, 'c');
-  text('REACHED WAVE ' + G.wave, 80, 84, P.S, 1, 'c');
+  text('GAME OVER', 80, 6, P.m, 2, 'c', P.p);
+  text('SCORE', 80, 21, P.S, 1, 'c');
+  text(String(G.score), 80, 28, P.w, 2, 'c', P.n);
+  const blink = ((G.t * 3) | 0) % 2 === 0;
+  text((G.newBest ? 'NEW BEST!' : 'BEST ' + G.best) + '  WAVE ' + G.wave, 80, 41, G.newBest ? (blink ? P.y : P.w) : P.S, 1, 'c');
   if (G.overT > 0.8) {
+    drawBoard();
     box(BTN.retry, 'PLAY AGAIN', P.C);
     box(BTN.share, 'SHARE SCORE ON X', P.M);
   }
+}
+function drawBoard() {
+  // name entry row (the text field itself is the HTML #nameIn laid over x 22..104)
+  if (LB.status === 'ready' && !LB.sent && G.score > 0) box(BTN.save, LB.busy ? '...' : 'SAVE', P.y);
+  else if (LB.sent) text('SAVED!  YOU ARE RANK ' + LB.rank, 80, 53, P.y, 1, 'c');
+  else if (LB.status === 'ready') text('SCORE POINTS TO JOIN THE BOARD', 80, 53, P.S, 1, 'c');
+  if (LB.msg) text(LB.msg, 80, 63, P.r, 1, 'c');
+
+  text('LEADERBOARD', 80, 70, P.C, 1, 'c');
+  if (LB.status === 'loading' || LB.status === 'idle') { text('LOADING...', 80, 86, P.S, 1, 'c'); return; }
+  if (LB.status === 'offline') { text('LEADERBOARD OFFLINE', 80, 86, P.S, 1, 'c'); return; }
+  if (!LB.top.length) { text('NO SCORES YET. BE FIRST!', 80, 86, P.S, 1, 'c'); return; }
+  LB.top.slice(0, 5).forEach((row, i) => {
+    const y = 78 + i * 6, me = LB.sent && row.name === LB.name;
+    const col = me ? P.y : i === 0 ? P.w : P.s;
+    text((i + 1) + '.', 22, y, col, 1);
+    text(row.name, 32, y, col, 1);
+    text(String(row.score), 138, y, col, 1, 'r');
+  });
 }
 
 /* ------------------------------------------------------------------- input */
@@ -1483,6 +1570,7 @@ function share() {
 
 window.addEventListener('pointerdown', e => {
   audioInit();
+  if (e.target === nameIn) return; // let the name box take focus and open the keyboard
   try { cv.focus({ preventScroll: true }); } catch (_) {}
   const p = toLogical(e);
   if (inBtn(p, BTN.mute)) return; // handled on click
@@ -1505,14 +1593,21 @@ window.addEventListener('pointercancel', endDrag);
 window.addEventListener('click', e => {
   audioInit();
   const p = toLogical(e);
+  if (e.target === nameIn) return;
   if (inBtn(p, BTN.mute)) { muted = !muted; return; }
   if (G.state === 'over' && G.overT > 0.8) {
-    if (inBtn(p, BTN.share)) share();
+    if (nameIn.style.display === 'block' && inBtn(p, BTN.save)) lbSubmit();
+    else if (inBtn(p, BTN.share)) share();
     else if (inBtn(p, BTN.retry)) startGame();
   }
 });
 window.addEventListener('keydown', e => {
   audioInit();
+  if (e.target === nameIn) { // typing a name: no game shortcuts, Enter saves
+    if (e.key === 'Enter') { e.preventDefault(); lbSubmit(); }
+    else if (e.key === 'Escape') nameIn.blur();
+    return;
+  }
   const k = e.key;
   if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(k)) e.preventDefault();
   if (k === 'ArrowLeft' || k === 'a' || k === 'A') { keys.left = true; ctrl = 'key'; }
@@ -1531,6 +1626,7 @@ window.addEventListener('keydown', e => {
     G.state = G.state === 'play' ? 'paused' : 'play';
 });
 window.addEventListener('keyup', e => {
+  if (e.target === nameIn) return;
   const k = e.key;
   if (k === 'ArrowLeft' || k === 'a' || k === 'A') keys.left = false;
   if (k === 'ArrowRight' || k === 'd' || k === 'D') keys.right = false;
@@ -1547,6 +1643,7 @@ function frame(now) {
   acc += d;
   while (acc >= STEP) { update(STEP); acc -= STEP; }
   draw();
+  syncNameBox();
   if (!crt.classList.contains('off')) { gctx.clearRect(0, 0, W, H); gctx.drawImage(cv, 0, 0); }
   requestAnimationFrame(frame);
 }
