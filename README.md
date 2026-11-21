@@ -48,10 +48,12 @@ It's one self-contained file (`index.html`): no build step, no dependencies, no 
 `index.html` already includes the `twitter:card = player` meta tags, so a post with the game's link
 shows it as a playable embed (480×480):
 
-1. The game is hosted on **Vercel** at `https://frostbyte-anniversary-game.vercel.app/`.
+1. The game is hosted on **Vercel** at `https://anniv.frostbyte.art/` (a CNAME on the
+   `frostbyte.art` DNS at Namecheap points `anniv` at Vercel). It's also reachable at
+   `https://frostbyte-anniversary-game.vercel.app/`.
    The Vercel project is linked to this repo, so every push to `main` deploys to production.
    (GitHub Pages also still serves a copy at `https://delgersaikhannn.github.io/frostbyte-anniversary-game/`.)
-2. When you move to a custom domain (or another host), replace the URL in the `twitter:player`,
+2. If you move to another domain or host, replace the URL in the `twitter:player`,
    `twitter:image`, `og:url`, `og:image` meta tags and in `GAME_URL` inside the script.
 3. Post the link on X. X shows `card.png` as the preview and runs the game inline where
    player cards are supported (on some clients it opens in X's in-app browser instead).
