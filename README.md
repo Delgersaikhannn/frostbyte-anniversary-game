@@ -7,6 +7,9 @@ Aliens crashed the birthday party: drag (or use arrow keys) to move, snowballs f
 - Don't let aliens land, because each one that does costs a heart.
 - Pickups: 🎂 party cake = triple snowballs, ❄️ snowflake = frost shield, ❤️ = extra heart.
 - Every 4th wave the **mothership** shows up. Beat it to trigger the birthday celebration.
+- The sky changes every **100 points**, cycling through 7 themes (Midnight Snow, Aurora Sky,
+  Cosmic Nebula, Synth Sunset, Alien World, Fireworks, Balloon Party) with a pixel-dither dissolve.
+  Tweak `THEME_EVERY` in `index.html` to change the interval.
 - Game over screen has a **Share score on X** button.
 
 It's one self-contained file (`index.html`): no build step, no dependencies, no external requests.
