@@ -60,6 +60,26 @@ shows it as a playable embed (480×480):
 
 The host must allow framing (no `X-Frame-Options: DENY`). Vercel and GitHub Pages are both fine.
 
+## Leaderboard
+
+On the game over screen players type a name or X handle (letters, numbers and `_`, up to 15,
+stored in uppercase, a leading `@` is dropped) and tap **SAVE**. The board shows each name's best
+run, top 5 in game (the API returns the top 10). The name is remembered for next time.
+
+- `api/scores.js` is a Vercel function: `GET /api/scores` returns the board, `POST` saves a score.
+  It checks the name, rejects scores that aren't possible for the play time, and allows one
+  save per player every 15 seconds.
+- Scores live in Supabase (table `scores`, view `leaderboard`). Set it up once by running
+  `supabase/leaderboard.sql` in the Supabase SQL Editor.
+- Vercel needs one environment variable: `SUPABASE_SECRET_KEY` (Supabase → Project Settings →
+  API Keys → the `sb_secret_...` secret key, or the legacy `service_role` key; not the publishable/anon
+  key). `SUPABASE_SERVICE_ROLE_KEY` also works as the name. Optional: `SUPABASE_URL`, `IP_SALT`.
+  All variables are listed in `.env.example` (copy it to `.env.local` for `vercel dev`; real
+  `.env` files are git-ignored).
+- To hide a rude name, tick `hidden` on its rows in the Supabase table editor.
+- Where `/api/scores` isn't available (a local static server, the GitHub Pages copy) the board
+  shows "LEADERBOARD OFFLINE" and the game works as before.
+
 ## Local testing
 
 Serve the folder with any static server and open `http://localhost:<port>/`.
