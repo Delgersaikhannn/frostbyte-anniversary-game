@@ -1,0 +1,42 @@
+# Frostbyte: Alien Defense — 2nd Anniversary
+
+A tiny 2D pixel shooter made for [Frostbyte](https://www.frostbyte.art/)'s 2nd anniversary.
+Aliens crashed the birthday party: drag (or use arrow keys) to move, snowballs fire automatically.
+
+- Green saucers take 1 hit, red saucers take 2 and shoot back.
+- Don't let aliens land, because each one that does costs a heart.
+- Pickups: 🎂 party cake = triple snowballs, ❄️ snowflake = frost shield, ❤️ = extra heart.
+- Every 4th wave the **mothership** shows up. Beat it to trigger the birthday celebration.
+- Game over screen has a **Share score on X** button.
+
+It's one self-contained file (`index.html`): no build step, no dependencies, no external requests.
+
+## Controls
+
+| Input | Action |
+| --- | --- |
+| Drag / mouse | Move |
+| ← → or A D | Move |
+| Space / Enter / tap | Start, retry |
+| P / Esc | Pause |
+| M or speaker icon | Mute |
+
+## Playing it inside an X post (player card)
+
+`index.html` already includes the `twitter:card = player` meta tags, so a post with the game's link
+shows it as a playable embed (480×480):
+
+1. Host the folder on any HTTPS static host. This repo is set up for **GitHub Pages**
+   (Settings → Pages → Deploy from branch → `main` / root), which serves it at
+   `https://delgersaikhannn.github.io/frostbyte-anniversary-game/`.
+2. If you host it somewhere else, replace that URL in the `twitter:player`, `twitter:image`,
+   `og:url`, `og:image` meta tags and in `GAME_URL` inside the script.
+3. Post the link on X. X shows `card.png` as the preview and runs the game inline where
+   player cards are supported (on some clients it opens in X's in-app browser instead).
+
+The host must allow framing (no `X-Frame-Options: DENY`). GitHub Pages is fine.
+
+## Local testing
+
+Serve the folder with any static server and open `http://localhost:<port>/`.
+Add `?debug` to the URL to get a `window.__fb` handle for jumping to the boss or game-over screens.
