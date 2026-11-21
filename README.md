@@ -73,6 +73,8 @@ run, top 5 in game (the API returns the top 10). The name is remembered for next
   `supabase/leaderboard.sql` in the Supabase SQL Editor.
 - Vercel needs one environment variable: `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Project Settings →
   API Keys → the `service_role` / secret key). Optional: `SUPABASE_URL` if the project changes.
+  All variables are listed in `.env.example` (copy it to `.env.local` for `vercel dev`; real
+  `.env` files are git-ignored).
 - To hide a rude name, tick `hidden` on its rows in the Supabase table editor.
 - Where `/api/scores` isn't available (a local static server, the GitHub Pages copy) the board
   shows "LEADERBOARD OFFLINE" and the game works as before.

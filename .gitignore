@@ -1,1 +1,7 @@
 .claude/
+
+# local env files (see .env.example)
+.env
+.env.*
+!.env.example
+.vercel/
