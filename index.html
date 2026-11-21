@@ -78,16 +78,42 @@ const P = {
 const CONFETTI = [P.m, P.c, P.y, P.g, P.P, P.w, P.o];
 
 /* ---------------------------------------------------------------- sprites */
-function sprite(rows, map) {
-  const h = rows.length, w = rows[0].length;
+/* One shared art style, matching Agent Delta's art: 1px black outlines ('Z'),
+   flat colors, one darker shade on the right/bottom edge.
+   sprite(rows, map, { outline, shade }) can add the outline and shade automatically. */
+const darken = (hex, f = 0.68) => '#' + [1, 3, 5].map(i => Math.round(parseInt(hex.slice(i, i + 2), 16) * f).toString(16).padStart(2, '0')).join('');
+const isDark = hex => parseInt(hex.slice(1, 3), 16) + parseInt(hex.slice(3, 5), 16) + parseInt(hex.slice(5, 7), 16) < 90;
+function sprite(rows, map, opt = {}) {
+  let h = rows.length, w = rows[0].length;
+  let g = rows.map(r => [...r].map(ch => { if (map && map[ch]) ch = map[ch]; return ch !== '.' && P[ch] ? P[ch] : null; }));
+  if (opt.shade) {
+    const at = (i, j) => (j >= 0 && j < h && i >= 0 && i < w) ? g[j][i] : null;
+    g = g.map((row, j) => row.map((c, i) => {
+      if (!c || isDark(c)) return c;
+      const edge = !at(i + 1, j) || !at(i, j + 1);
+      return edge && at(i - 1, j) && at(i, j - 1) ? darken(c) : c;
+    }));
+  }
+  if (opt.outline) {
+    const at = (i, j) => (j >= 0 && j < h && i >= 0 && i < w) ? g[j][i] : null;
+    const o = [];
+    for (let j = -1; j <= h; j++) {
+      const row = [];
+      for (let i = -1; i <= w; i++) {
+        const c = at(i, j);
+        row.push(c || (at(i - 1, j) || at(i + 1, j) || at(i, j - 1) || at(i, j + 1) ? '#000000' : null));
+      }
+      o.push(row);
+    }
+    g = o; w += 2; h += 2;
+  }
   const make = (white) => {
     const c = document.createElement('canvas');
     c.width = w; c.height = h;
     const x = c.getContext('2d');
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-      let ch = rows[j][i];
-      if (map && map[ch]) ch = map[ch];
-      if (ch !== '.' && P[ch]) { x.fillStyle = white ? '#ffffff' : P[ch]; x.fillRect(i, j, 1, 1); }
+      const col = g[j][i];
+      if (col) { x.fillStyle = white && !isDark(col) ? '#ffffff' : col; x.fillRect(i, j, 1, 1); }
     }
     return c;
   };
@@ -95,63 +121,81 @@ function sprite(rows, map) {
   return c;
 }
 const pad = (s, n) => { const l = (n - s.length) >> 1; return '.'.repeat(l) + s + '.'.repeat(n - s.length - l); };
+const STYLE = { outline: true, shade: true };
 
 function OVERLORD_ROWS(open) {
   return [
     pad('y...y...y', 23), pad('yy..yyy..yy', 23), pad('yyyyyyyyyyy', 23), pad('yryyyCyyyry', 23),
     pad('g'.repeat(13), 23), pad('g'.repeat(17), 23), pad('g'.repeat(19), 23),
-    pad('gkwkkkgggggggkkkwkg', 23), pad('gGkkkkkgggggkkkkkGg', 23), pad('gggGkkkkgggkkkkGggg', 23),
-    pad('g'.repeat(17), 23), pad(open ? 'gggggmkkkmggggg' : 'ggggggmmmgggggg', 23),
+    pad('gZwZZZgggggggZZZwZg', 23), pad('gGZZZZZgggggZZZZZGg', 23), pad('gggGZZZZgggZZZZGggg', 23),
+    pad('g'.repeat(17), 23), pad(open ? 'gggggmZZZmggggg' : 'ggggggZZZgggggg', 23),
     pad('g'.repeat(13), 23), pad('g'.repeat(11), 23), pad('G'.repeat(9), 23),
     pad('P'.repeat(15), 23), pad('PpPpPpPpPpPpPpPpP', 23),
   ];
 }
+// Frostbyte kid: cyan cap with a snowflake (brim to the right), purple hair, snowflake hoodie
 const PLAYER_ROWS = [
-  '...cccccc...',
-  '..cccwcwccc.',
-  '..ccccwcccc.',
-  '..cccwcwccc.',
-  '.dddddddddCC',
-  '.pssssssssp.',
-  '.pskksskksp.',
-  '.pskksskksp.',
-  '..ssssssss..',
-  '..cccwwccc..',
-  '.cccwccwccc.',
-  '.cccccccccc.',
-  '..NN....NN..',
+  '....ZZZZZZZ.....',
+  '...ZCcccccccZ...',
+  '..ZCcccwcwcccZ..',
+  '..ZcccccwccccdZ.',
+  '..ZccccwcwcccdZ.',
+  '.ZdddddddddddCCZ',
+  '.ZPZssssssssZZ..',
+  'ZPpZsZZssZZsZ...',
+  'ZPpZsZZssZZSZ...',
+  '.ZpZsssssssSZ...',
+  '..ZZsssZZsSZ....',
+  '...ZZsssssZZ....',
+  '..ZcZZZZZZZcZ...',
+  '.ZcCccwcwcccdZ..',
+  '.ZcCcccwccccdZ..',
+  '.ZcCccwcwcccdZ..',
+  '.ZddddddddddddZ.',
+  '..ZnnZ..ZnnZ....',
+  '..ZZZZ..ZZZZ....',
 ];
+// alien popping out of its saucer (A/B = blinking lights + thruster flicker)
+const UFO_A = [
+  '....ZZZZZZ....',
+  '...ZgwggggZ...',
+  '..ZgggggggGZ..',
+  '..ZgZZggZZGZ..',
+  '..ZgZZggZZGZ..',
+  '.ZZZggggggZZZ.',
+  'ZMPPPPPPPPPPpZ',
+  'ZPyPPyPPyPPypZ',
+  '.ZppppppppppZ.',
+  '..ZZZZZZZZZZ..',
+  '...ZoZ..ZoZ...',
+];
+const UFO_B = UFO_A.map((r, j) => j === 7 ? 'ZPPyPPyPPyPPpZ' : j === 10 ? '...ZyZ..ZyZ...' : r);
+const RED = { g: 'o', G: 'R', P: 'r', p: 'R' };
+const MOTHER_ROWS = (lights, jets) => [
+  pad('gggggggg', 28), pad('ggZZggggZZgg', 28), pad('CC' + 'g'.repeat(12) + 'CC', 28),
+  pad('C'.repeat(20), 28), pad('p' + 'P'.repeat(22) + 'p', 28), pad('p' + lights.repeat(6) + 'P', 28),
+  pad('p' + 'P'.repeat(24) + 'p', 28), pad('p'.repeat(22), 28), pad(jets, 28),
+];
+const SNATCH_ROWS = (lights) => [
+  pad('CCCCCC', 32), pad('CCggggCC', 32), pad('CggwwwwggC', 32), pad('CggwZZwggC', 32), pad('CCCggggggCCC', 32),
+  pad('o' + 'r'.repeat(24) + 'o', 32), pad('o' + lights.repeat(6) + 'o', 32), pad('R'.repeat(28), 32), pad('R'.repeat(20), 32),
+  pad('S', 32), pad('S', 32), pad('SSSSSSSSS', 32), pad('S.......S', 32), pad('S.......S', 32),
+];
+
 const SPR = {
   player: sprite(PLAYER_ROWS),
-  ufo1a: sprite(['....gggg....', '...gkggkg...', '...gggggg...', '.pPPPPPPPPp.', 'pPyPPyPPyPPp', '.pppppppppp.', '...p....p...']),
-  ufo1b: sprite(['....gggg....', '...gkggkg...', '...gggggg...', '.pPPPPPPPPp.', 'pPPyPPyPPyPp', '.pppppppppp.', '...p....p...']),
-  ufo2a: sprite(['....gggg....', '...gkggkg...', '...gggggg...', '.pPPPPPPPPp.', 'pPyPPyPPyPPp', '.pppppppppp.', '...p....p...'], { g: 'o', P: 'r', p: 'R' }),
-  ufo2b: sprite(['....gggg....', '...gkggkg...', '...gggggg...', '.pPPPPPPPPp.', 'pPPyPPyPPyPp', '.pppppppppp.', '...p....p...'], { g: 'o', P: 'r', p: 'R' }),
-  bossA: sprite([
-    pad('gggggggg', 28), pad('ggkkggggkkgg', 28), pad('CC' + 'g'.repeat(12) + 'CC', 28),
-    pad('C'.repeat(20), 28), pad('p' + 'P'.repeat(22) + 'p', 28), pad('p' + 'PPPy'.repeat(6) + 'P', 28),
-    pad('p' + 'P'.repeat(24) + 'p', 28), pad('p'.repeat(22), 28), pad('m.....m.....m.....m', 28),
-  ]),
-  bossB: sprite([
-    pad('gggggggg', 28), pad('ggkkggggkkgg', 28), pad('CC' + 'g'.repeat(12) + 'CC', 28),
-    pad('C'.repeat(20), 28), pad('p' + 'P'.repeat(22) + 'p', 28), pad('p' + 'PPyP'.repeat(6) + 'P', 28),
-    pad('p' + 'P'.repeat(24) + 'p', 28), pad('p'.repeat(22), 28), pad('M.....M.....M.....M', 28),
-  ]),
+  ufo1a: sprite(UFO_A), ufo1b: sprite(UFO_B),
+  ufo2a: sprite(UFO_A, RED), ufo2b: sprite(UFO_B, RED),
+  // boss 1: Mothership
+  bossA: sprite(MOTHER_ROWS('PPPy', 'm.....m.....m.....m'), null, STYLE),
+  bossB: sprite(MOTHER_ROWS('PPyP', 'M.....M.....M.....M'), null, STYLE),
   // boss 2: Cake Snatcher (claw carries the stolen party cake, drawn separately)
-  snatchA: sprite([
-    pad('CCCCCC', 32), pad('CCggggCC', 32), pad('CggwwwwggC', 32), pad('CggwkkwggC', 32), pad('CCCggggggCCC', 32),
-    pad('o' + 'r'.repeat(24) + 'o', 32), pad('o' + 'ryrr'.repeat(6) + 'o', 32), pad('R'.repeat(28), 32), pad('R'.repeat(20), 32),
-    pad('S', 32), pad('S', 32), pad('SSSSSSSSS', 32), pad('S.......S', 32), pad('S.......S', 32),
-  ]),
-  snatchB: sprite([
-    pad('CCCCCC', 32), pad('CCggggCC', 32), pad('CggwwwwggC', 32), pad('CggwkkwggC', 32), pad('CCCggggggCCC', 32),
-    pad('o' + 'r'.repeat(24) + 'o', 32), pad('o' + 'rrry'.repeat(6) + 'o', 32), pad('R'.repeat(28), 32), pad('R'.repeat(20), 32),
-    pad('S', 32), pad('S', 32), pad('SSSSSSSSS', 32), pad('S.......S', 32), pad('S.......S', 32),
-  ]),
+  snatchA: sprite(SNATCH_ROWS('ryrr'), null, STYLE),
+  snatchB: sprite(SNATCH_ROWS('rrry'), null, STYLE),
   // boss 3: Alien Overlord (B = mouth open, eyes glowing red before a ring attack)
-  overA: sprite(OVERLORD_ROWS(false)),
-  overB: sprite(OVERLORD_ROWS(true), { w: 'r' }),
-  orb: sprite(['.PMP.', 'PMwMP', 'MwwwM', 'PMwMP', '.PMP.']),
+  overA: sprite(OVERLORD_ROWS(false), null, STYLE),
+  overB: sprite(OVERLORD_ROWS(true), { w: 'r' }, STYLE),
+  orb: sprite(['..ZZZ..', '.ZMwMZ.', 'ZMwwMPZ', 'ZMMMMPZ', 'ZPMMPpZ', '.ZPppZ.', '..ZZZ..']),
   // ally: Agent Delta from Planet Delta (pixel-for-pixel from the character art, 19x18)
   ally: sprite([
     '..KKK.KKKKKKKKKK...',
@@ -173,11 +217,12 @@ const SPR = {
     '.KKwwwwLLLlcccwwK..',
     '.KwwwwwwwLLlwwwwwK.',
   ], { K: 'Z', c: 'q', w: 'W' }),
-  cake: sprite(['...y...', '...w...', '.MMMMM.', 'MwMwMwM', 'mmmmmmm', 'mMMMMMm', 'mmmmmmm']),
-  flake: sprite(['C..C..C', '.C.C.C.', '..CwC..', 'CCwwwCC', '..CwC..', '.C.C.C.', 'C..C..C']),
-  heart: sprite(['.rr.rr.', 'rMrrrrr', 'rrrrrrr', 'rrrrrrr', '.rrrrr.', '..rrr..', '...r...']),
-  heartS: sprite(['.r.r.', 'rrrrr', 'rrrrr', '.rrr.', '..r..']),
-  heartE: sprite(['.n.n.', 'nnnnn', 'nnnnn', '.nnn.', '..n..']),
+  // pickups (9px, outlined)
+  cake: sprite(['....y....', '...ZoZ...', '...ZwZ...', '.ZZZZZZZ.', 'ZwMwMwMwZ', 'ZMmMmMmmZ', 'ZFFFFFFfZ', 'ZmmmmmmRZ', '.ZZZZZZZ.']),
+  flake: sprite(['....Z....', '...ZwZ...', '..ZwCCZ..', '.ZwCCCdZ.', 'ZwCCwCCdZ', '.ZCCCCdZ.', '..ZCCdZ..', '...ZdZ...', '....Z....']),
+  heart: sprite(['.ZZZ.ZZZ.', 'ZrwrZrrrZ', 'ZrrrrrrRZ', 'ZrrrrrrRZ', '.ZrrrrRZ.', '..ZrrRZ..', '...ZRZ...', '....Z....']),
+  heartS: sprite(['.ZZ.ZZ.', 'ZrwZrrZ', 'ZrrrrRZ', '.ZrrRZ.', '..ZRZ..', '...Z...']),
+  heartE: sprite(['.ZZ.ZZ.', 'ZnnZnnZ', 'ZnnnnnZ', '.ZnnnZ.', '..ZnZ..', '...Z...']),
   snow: sprite(['.C.', 'CwC', '.C.']),
 };
 
@@ -475,7 +520,7 @@ let player, bullets, ebullets, enemies, pickups, parts, boss;
 parts = [];
 
 function reset() {
-  player = { x: 80, y: 136, tx: 80, fire: 0, triple: 0, shield: 0, inv: 1 };
+  player = { x: 80, y: 131, tx: 80, fire: 0, triple: 0, shield: 0, inv: 1 };
   bullets = []; ebullets = []; enemies = []; pickups = []; parts = []; boss = null;
   Object.assign(G, { score: 0, newBest: false, lives: 3, wave: 1, kills: 0, waveKills: 0, spawn: 1.2, bossCount: 0, shake: 0, flash: 0, overT: 0 });
   setTheme(0); bgState.nameT = 0;
@@ -972,12 +1017,12 @@ function update(dt) {
     if (e.t === 2 || G.wave >= 3) {
       e.shoot -= dt;
       if (e.shoot <= 0 && e.y > 4 && e.y < 112) {
-        ebullets.push({ x: e.x, y: e.y + 7, vx: clamp((pl.x - e.x) * 0.3, -30, 30), vy: 52 + G.wave * 3 });
+        ebullets.push({ x: e.x, y: e.y + 9, vx: clamp((pl.x - e.x) * 0.3, -30, 30), vy: 52 + G.wave * 3 });
         e.shoot = e.t === 2 ? rnd(1.6, 3) : rnd(3, 5.5);
       }
     }
     // collide with player
-    if (Math.abs(e.x - pl.x) < 10 && e.y + 7 > pl.y + 2 && e.y < pl.y + 12) {
+    if (Math.abs(e.x - pl.x) < 11 && e.y + 9 > pl.y + 4 && e.y < pl.y + 17) {
       enemies.splice(i, 1); burst(e.x, e.y + 3, [P.g, P.P], 12, 50); SFX.boom(); hurtPlayer(); continue;
     }
     // landed: lose a heart
@@ -1010,14 +1055,14 @@ function update(dt) {
   for (let i = ebullets.length - 1; i >= 0; i--) {
     const b = ebullets[i]; b.x += b.vx * dt; b.y += b.vy * dt;
     if (b.y > 152 || b.y < -6 || b.x < -6 || b.x > W + 6) { ebullets.splice(i, 1); continue; }
-    if (Math.abs(b.x - pl.x) < 5 && b.y > pl.y + 2 && b.y < pl.y + 13) { ebullets.splice(i, 1); hurtPlayer(); }
+    if (Math.abs(b.x - pl.x) < 6 && b.y > pl.y + 4 && b.y < pl.y + 18) { ebullets.splice(i, 1); hurtPlayer(); }
   }
 
   // pickups
   for (let i = pickups.length - 1; i >= 0; i--) {
     const k = pickups[i]; k.t += dt; k.y += 26 * dt;
     if (k.y > 146) { pickups.splice(i, 1); continue; }
-    if (Math.abs(k.x - pl.x) < 9 && k.y + 7 > pl.y && k.y < pl.y + 13) {
+    if (Math.abs(k.x - pl.x) < 10 && k.y + 9 > pl.y && k.y < pl.y + 18) {
       pickups.splice(i, 1); SFX.power();
       burst(k.x, k.y + 3, CONFETTI, 18, 50);
       if (k.type === 'cake') { pl.triple = 9; banner('PARTY CAKE!', 'TRIPLE SNOWBALLS', 1.2, P.M); }
@@ -1058,13 +1103,13 @@ function drawMute() {
 }
 function drawPlayer(x, y, sc = 1) {
   const s = SPR.player;
-  ctx.drawImage(s, Math.round(x - 6 * sc), Math.round(y), 12 * sc, 13 * sc);
+  ctx.drawImage(s, Math.round(x - (s.width >> 1) * sc), Math.round(y), s.width * sc, s.height * sc);
 }
 function drawShield(x, y) {
   ctx.fillStyle = ((G.t * 8) | 0) % 2 ? P.C : P.c;
   for (let a = 0; a < 20; a++) {
     const ang = a / 20 * 6.283 + G.t * 2;
-    ctx.fillRect(Math.round(x + Math.cos(ang) * 10), Math.round(y + 6 + Math.sin(ang) * 10), 1, 1);
+    ctx.fillRect(Math.round(x + Math.cos(ang) * 12), Math.round(y + 9 + Math.sin(ang) * 12), 1, 1);
   }
 }
 
@@ -1104,7 +1149,7 @@ function drawTitle() {
 
   // hero + saucers
   const bob = Math.round(Math.sin(t * 3) * 2);
-  drawPlayer(80, 72 + bob, 2);
+  drawPlayer(80, 67 + bob, 2);
   const f = ((t * 6) | 0) % 2;
   for (let i = 0; i < 3; i++) {
     const a = t * 1.3 + i * 2.094;
@@ -1112,8 +1157,8 @@ function drawTitle() {
     ctx.drawImage(i === 1 ? (f ? SPR.ufo2a : SPR.ufo2b) : (f ? SPR.ufo1a : SPR.ufo1b), Math.round(ux - 6), Math.round(uy));
   }
   // birthday cake on the snow
-  ctx.drawImage(SPR.cake, 18, 141, 7, 7);
-  ctx.drawImage(SPR.cake, 135, 141, 7, 7);
+  ctx.drawImage(SPR.cake, 17, 140);
+  ctx.drawImage(SPR.cake, 134, 140);
 
   if (((t * 2.2) | 0) % 2 === 0) text('TAP OR SPACE TO PLAY', 80, 112, P.C, 1, 'c');
   text('DRAG / ARROWS TO MOVE', 80, 122, P.S, 1, 'c');
@@ -1126,16 +1171,16 @@ function drawBoss(f) {
   if (b.type === 0) {
     let s = f ? SPR.bossA : SPR.bossB;
     if (b.hit > 0) s = s.white;
-    ctx.drawImage(s, bx - 14, by);
+    ctx.drawImage(s, bx - 15, by - 1);
     ctx.fillStyle = P.G; // tractor beam shimmer
     const ph = (G.t * 12) | 0;
     for (let j = 0; j < 18; j++) {
       const half = 2 + (j >> 2);
-      for (let i = -half; i <= half; i++) if (((i + j + ph) & 3) === 0) ctx.fillRect(bx + i, by + 9 + j, 1, 1);
+      for (let i = -half; i <= half; i++) if (((i + j + ph) & 3) === 0) ctx.fillRect(bx + i, by + 10 + j, 1, 1);
     }
   } else if (b.type === 1) {
     if (b.beam > 0) {
-      const x = Math.round(b.beamX), top = by + 19;
+      const x = Math.round(b.beamX), top = by + 22;
       if (b.beam > 0.8) { // warning
         if (((G.t * 14) | 0) % 2) {
           ctx.fillStyle = P.r;
@@ -1151,16 +1196,16 @@ function drawBoss(f) {
     }
     let s = f ? SPR.snatchA : SPR.snatchB;
     if (b.hit > 0) s = s.white;
-    ctx.drawImage(s, bx - 15, by);
-    ctx.drawImage(SPR.cake, bx - 3, by + 12); // the stolen cake
+    ctx.drawImage(s, bx - 16, by - 1);
+    ctx.drawImage(SPR.cake, bx - 4, by + 12); // the stolen cake
   } else {
     const back = [], front = [];
     for (const o of b.orbs) if (o.hp > 0) (Math.sin(o.a) < 0 ? back : front).push(orbPos(b, o));
-    for (const p of back) ctx.drawImage(SPR.orb, Math.round(p.x) - 2, Math.round(p.y) - 2);
+    for (const p of back) ctx.drawImage(SPR.orb, Math.round(p.x) - 3, Math.round(p.y) - 3);
     let s = b.ring < 0.45 ? SPR.overB : SPR.overA;
     if (b.hit > 0) s = s.white;
-    ctx.drawImage(s, bx - 11, by);
-    for (const p of front) ctx.drawImage(SPR.orb, Math.round(p.x) - 2, Math.round(p.y) - 2);
+    ctx.drawImage(s, bx - 12, by - 1);
+    for (const p of front) ctx.drawImage(SPR.orb, Math.round(p.x) - 3, Math.round(p.y) - 3);
   }
   // hp bar + name
   text(BOSS_NAMES[b.type] + (b.rep ? ' LV' + (b.rep + 1) : ''), 80, 8, P.S, 1, 'c');
@@ -1177,13 +1222,13 @@ function drawPlay() {
   for (const k of pickups) {
     const s = SPR[k.type], yy = Math.round(k.y + Math.sin(k.t * 6));
     if (((k.t * 10) | 0) % 6 === 0) { ctx.fillStyle = P.w; ctx.fillRect(k.x - 5, yy + 3, 1, 1); ctx.fillRect(k.x + 5, yy + 3, 1, 1); }
-    ctx.drawImage(s, Math.round(k.x - 3), yy);
+    ctx.drawImage(s, Math.round(k.x - 4), yy);
   }
   // enemies
   for (const e of enemies) {
     let s = e.t === 2 ? (f ? SPR.ufo2a : SPR.ufo2b) : (f ? SPR.ufo1a : SPR.ufo1b);
     if (e.hit > 0) s = s.white;
-    ctx.drawImage(s, Math.round(e.x - 6), Math.round(e.y));
+    ctx.drawImage(s, Math.round(e.x - 7), Math.round(e.y - 2));
   }
   // boss
   if (boss) drawBoss(f);
@@ -1192,6 +1237,7 @@ function drawPlay() {
   for (const b of bullets) ctx.drawImage(SPR.snow, Math.round(b.x - 1), Math.round(b.y - 1));
   drawAllyShots();
   for (const b of ebullets) {
+    ctx.fillStyle = P.Z; ctx.fillRect(Math.round(b.x - 2), Math.round(b.y - 2), 4, 5);
     ctx.fillStyle = f ? P.m : P.M; ctx.fillRect(Math.round(b.x - 1), Math.round(b.y - 1), 2, 3);
     ctx.fillStyle = P.w; ctx.fillRect(Math.round(b.x - 1), Math.round(b.y), 1, 1);
   }
@@ -1204,9 +1250,9 @@ function drawPlay() {
   text(String(G.score).padStart(6, '0'), 2, 2, P.w, 1, 'l', P.n);
   text('W' + G.wave, 80, 2, P.S, 1, 'c');
   for (let i = 0; i < 5; i++) {
-    const x = 153 - i * 6;
-    if (i < G.lives) ctx.drawImage(SPR.heartS, x, 2);
-    else if (i < 3) ctx.drawImage(SPR.heartE, x, 2);
+    const x = 152 - i * 7;
+    if (i < G.lives) ctx.drawImage(SPR.heartS, x, 1);
+    else if (i < 3) ctx.drawImage(SPR.heartE, x, 1);
   }
   let by = 9;
   if (pl.triple > 0) { ctx.fillStyle = P.m; ctx.fillRect(2, by, Math.ceil(pl.triple / 9 * 24), 1); by += 2; }
@@ -1327,7 +1373,7 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // test hook: open with ?debug to poke at state from the console
-if (/[?&]debug\b/.test(location.search)) window.__fb = { G, get player() { return player; }, get ally() { return ally; }, talk, say, get boss() { return boss; }, get ebullets() { return ebullets; }, get bullets() { return bullets; }, startGame, spawnBoss, nextWave, gameOver, bossDefeated, bgState, setTheme, THEMES, drawBackground, updateBg, update, draw };
+if (/[?&]debug\b/.test(location.search)) window.__fb = { G, SPR, get player() { return player; }, get ally() { return ally; }, talk, say, get boss() { return boss; }, get ebullets() { return ebullets; }, get bullets() { return bullets; }, startGame, spawnBoss, nextWave, gameOver, bossDefeated, bgState, setTheme, THEMES, drawBackground, updateBg, update, draw };
 })();
 </script>
 </body>
