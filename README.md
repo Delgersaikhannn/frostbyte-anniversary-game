@@ -13,6 +13,12 @@ Aliens crashed the birthday party: drag (or use arrow keys) to move, snowballs f
   3. **Alien Overlord** (wave 12): shielded by orbiting orbs that block snowballs, fires ring
      bursts, and adds a spiral stream below half HP.
   From then on the Overlord keeps coming back (LV2, LV3, …) with more HP and faster attacks.
+- **Pick your Frostbyte** on the title screen: **Santa** or **Hoodie** (tap one, or ←/→ then
+  Space). Both are pixel-for-pixel from the Frostbyte reference art, and the choice is remembered.
+  Rename them in `CHARS`.
+- **Art style**: every sprite follows the Frostbyte references: an outline in a dark tint of its
+  own color, flat colors with a darker right/bottom shade, and a soft 1px drop shadow on the right.
+  `sprite(rows, map, { trim, shade, outline, shadow })` applies these automatically.
 - **Agent Delta**, your ally from Planet Delta, flies in on a delta hoverboard for every boss
   fight. They shoot at the boss, drop supplies (a heart when you're low), warn you when the
   Cake Snatcher lines up its beam, and fire homing Delta Pulses that pop the Overlord's orbs.
@@ -42,15 +48,15 @@ It's one self-contained file (`index.html`): no build step, no dependencies, no 
 `index.html` already includes the `twitter:card = player` meta tags, so a post with the game's link
 shows it as a playable embed (480×480):
 
-1. Host the folder on any HTTPS static host. This repo is set up for **GitHub Pages**
-   (Settings → Pages → Deploy from branch → `main` / root), which serves it at
-   `https://delgersaikhannn.github.io/frostbyte-anniversary-game/`.
-2. If you host it somewhere else, replace that URL in the `twitter:player`, `twitter:image`,
-   `og:url`, `og:image` meta tags and in `GAME_URL` inside the script.
+1. The game is hosted on **Vercel** at `https://frostbyte-anniversary-game.vercel.app/`.
+   The Vercel project is linked to this repo, so every push to `main` deploys to production.
+   (GitHub Pages also still serves a copy at `https://delgersaikhannn.github.io/frostbyte-anniversary-game/`.)
+2. When you move to a custom domain (or another host), replace the URL in the `twitter:player`,
+   `twitter:image`, `og:url`, `og:image` meta tags and in `GAME_URL` inside the script.
 3. Post the link on X. X shows `card.png` as the preview and runs the game inline where
    player cards are supported (on some clients it opens in X's in-app browser instead).
 
-The host must allow framing (no `X-Frame-Options: DENY`). GitHub Pages is fine.
+The host must allow framing (no `X-Frame-Options: DENY`). Vercel and GitHub Pages are both fine.
 
 ## Local testing
 

@@ -11,9 +11,9 @@
 <meta name="twitter:card" content="player">
 <meta name="twitter:title" content="Frostbyte: Alien Defense">
 <meta name="twitter:description" content="Aliens crashed Frostbyte's 2nd birthday party. Tap to play right here.">
-<meta name="twitter:image" content="https://delgersaikhannn.github.io/frostbyte-anniversary-game/card.png">
+<meta name="twitter:image" content="https://frostbyte-anniversary-game.vercel.app/card.png">
 <meta name="twitter:image:alt" content="Pixel-art title screen of Frostbyte: Alien Defense, 2nd anniversary edition">
-<meta name="twitter:player" content="https://delgersaikhannn.github.io/frostbyte-anniversary-game/">
+<meta name="twitter:player" content="https://frostbyte-anniversary-game.vercel.app/">
 <meta name="twitter:player:width" content="480">
 <meta name="twitter:player:height" content="480">
 
@@ -21,8 +21,8 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="Frostbyte: Alien Defense">
 <meta property="og:description" content="Aliens crashed Frostbyte's 2nd birthday party. Tap to play.">
-<meta property="og:url" content="https://delgersaikhannn.github.io/frostbyte-anniversary-game/">
-<meta property="og:image" content="https://delgersaikhannn.github.io/frostbyte-anniversary-game/card.png">
+<meta property="og:url" content="https://frostbyte-anniversary-game.vercel.app/">
+<meta property="og:image" content="https://frostbyte-anniversary-game.vercel.app/card.png">
 <link rel="icon" href="card.png">
 
 <style>
@@ -102,7 +102,7 @@
 
 /* ------------------------------------------------------------------ setup */
 const W = 160, H = 160;
-const GAME_URL = 'https://delgersaikhannn.github.io/frostbyte-anniversary-game/';
+const GAME_URL = 'https://frostbyte-anniversary-game.vercel.app/';
 const cv = document.getElementById('c');
 const ctx = cv.getContext('2d');
 cv.width = W; cv.height = H;
@@ -139,20 +139,41 @@ const P = {
   // Agent Delta's colors, taken from the original character art
   Z: '#000000', F: '#ffd9a8', f: '#efcb8d', h: '#583300', b: '#6d4e21', e: '#858585',
   l: '#d6d6d6', L: '#ebebeb', a: '#adadad', q: '#c2c2c2', W: '#ffffff', v: '#e5d9f2',
+  // Frostbyte character colors, taken from the reference art
+  U: '#1b237e', B: '#2962fe', I: '#e3f4fe', H: '#ff2b00', J: '#ff6b4c', E: '#b2b2b2', X: '#02ff01',
+  V: '#6065a6', O: '#ee9f70', Y: '#ffc107', T: '#3b224f', Q: '#756582', D: '#a34575', A: '#ffefc9',
+  j: '#4f2457', i: '#01bcd6',
+  // outline tints for the aliens
+  u: '#2a1650', x: '#4a0f1f', t: '#163a1c',
 };
 const CONFETTI = [P.m, P.c, P.y, P.g, P.P, P.w, P.o];
 
 /* ---------------------------------------------------------------- sprites */
-/* One shared art style, matching Agent Delta's art: 1px black outlines ('Z'),
-   flat colors, one darker shade on the right/bottom edge.
-   sprite(rows, map, { outline, shade }) can add the outline and shade automatically. */
+/* One shared art style, taken from the Frostbyte character references:
+   a 1px outline in a dark tint of the sprite's own color (not pure black),
+   flat colors, a darker right/bottom shade, and a 1px drop shadow on the right.
+   sprite(rows, map, opts) can add these automatically:
+     trim    - drop empty rows/columns around the art
+     shade   - darken right/bottom edge pixels
+     outline - true (black) or a hex color
+     shadow  - hex color of the 1px right-side drop shadow */
 const darken = (hex, f = 0.68) => '#' + [1, 3, 5].map(i => Math.round(parseInt(hex.slice(i, i + 2), 16) * f).toString(16).padStart(2, '0')).join('');
 const isDark = hex => parseInt(hex.slice(1, 3), 16) + parseInt(hex.slice(3, 5), 16) + parseInt(hex.slice(5, 7), 16) < 90;
 function sprite(rows, map, opt = {}) {
-  let h = rows.length, w = rows[0].length;
   let g = rows.map(r => [...r].map(ch => { if (map && map[ch]) ch = map[ch]; return ch !== '.' && P[ch] ? P[ch] : null; }));
+  let h = g.length, w = g[0].length;
+  const keep = new Set(); // outline/shadow pixels stay put in the white hit-flash
+  if (opt.trim) {
+    while (g.length && g[0].every(c => !c)) g.shift();
+    while (g.length && g[g.length - 1].every(c => !c)) g.pop();
+    let l = 0, r = 0;
+    while (g.every(row => !row[l])) l++;
+    while (g.every(row => !row[row.length - 1 - r])) r++;
+    g = g.map(row => row.slice(l, row.length - r));
+    h = g.length; w = g[0].length;
+  }
+  const at = (i, j) => (j >= 0 && j < h && i >= 0 && i < w) ? g[j][i] : null;
   if (opt.shade) {
-    const at = (i, j) => (j >= 0 && j < h && i >= 0 && i < w) ? g[j][i] : null;
     g = g.map((row, j) => row.map((c, i) => {
       if (!c || isDark(c)) return c;
       const edge = !at(i + 1, j) || !at(i, j + 1);
@@ -160,17 +181,19 @@ function sprite(rows, map, opt = {}) {
     }));
   }
   if (opt.outline) {
-    const at = (i, j) => (j >= 0 && j < h && i >= 0 && i < w) ? g[j][i] : null;
+    const oc = opt.outline === true ? '#000000' : opt.outline; keep.add(oc);
     const o = [];
     for (let j = -1; j <= h; j++) {
       const row = [];
-      for (let i = -1; i <= w; i++) {
-        const c = at(i, j);
-        row.push(c || (at(i - 1, j) || at(i + 1, j) || at(i, j - 1) || at(i, j + 1) ? '#000000' : null));
-      }
+      for (let i = -1; i <= w; i++) row.push(at(i, j) || (at(i - 1, j) || at(i + 1, j) || at(i, j - 1) || at(i, j + 1) ? oc : null));
       o.push(row);
     }
     g = o; w += 2; h += 2;
+  }
+  if (opt.shadow) {
+    keep.add(opt.shadow);
+    g = g.map(row => { const r = row.concat([null]); for (let i = w; i > 0; i--) if (!r[i] && r[i - 1] && r[i - 1] !== opt.shadow) r[i] = opt.shadow; return r; });
+    w += 1;
   }
   const make = (white) => {
     const c = document.createElement('canvas');
@@ -178,7 +201,7 @@ function sprite(rows, map, opt = {}) {
     const x = c.getContext('2d');
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
       const col = g[j][i];
-      if (col) { x.fillStyle = white && !isDark(col) ? '#ffffff' : col; x.fillRect(i, j, 1, 1); }
+      if (col) { x.fillStyle = white && !isDark(col) && !keep.has(col) ? '#ffffff' : col; x.fillRect(i, j, 1, 1); }
     }
     return c;
   };
@@ -186,7 +209,61 @@ function sprite(rows, map, opt = {}) {
   return c;
 }
 const pad = (s, n) => { const l = (n - s.length) >> 1; return '.'.repeat(l) + s + '.'.repeat(n - s.length - l); };
-const STYLE = { outline: true, shade: true };
+const SHADOW = '#5a5a96'; // the soft right-side drop shadow every character casts
+
+/* --- playable Frostbytes, pixel-for-pixel from the references (they already
+       include their own outline and right-side shadow) */
+const SANTA_ROWS = [
+  '.............AAAAABB',
+  '........AAAAAAAAA..B',
+  '.....CCDBAAAAAA.....',
+  '....CEEBBBAAAAAA....',
+  '...CEEFFFBBBAAAAG...',
+  '...CEFFFFFFBBAAAAH..',
+  '..CEEIFFFFFFBBAAAJ..',
+  '..CEKFFFFFFFFFBBBL..',
+  '..CEFMMFFFFFMMNECO..',
+  '..CEFMMMFFFMMMNECO..',
+  '..CEFFMMFFFMMFFECO..',
+  '..CEFFFFPPPFFFFECO..',
+  '...CQFFFFFFFFFECO...',
+  '....CEFFFRFFFECO....',
+  '...SQFFRTTTRFFUSV...',
+  '..CEEFFFTRTFFFEECO..',
+  '..CEEFFRTTTRFFEECO..',
+  '..CEWFFFFRFFFFCECO..',
+  '...SCFFCCCCCFFCCCO..',
+  '....CPPCO..CPPCO....',
+  '....CCCCO..CCCCO....',
+];
+const SANTA_MAP = { A: 'H', B: 'W', C: 'U', D: 'W', E: 'B', F: 'I', G: 'J', H: 'J', I: 'I', J: 'J', K: 'I', L: 'E', M: 'X', N: 'I', O: 'V', P: 'O', Q: 'B', R: 'Y', S: 'U', T: 'Z', U: 'B', V: 'V', W: 'U' };
+const HOODIE_ROWS = [
+  '.....AAAAAAAAAB......',
+  '....ACCCCCCCCCAB.....',
+  '...ADCEEEEEEECCAB....',
+  '...ACEEEEEEEEECAB....',
+  '..FCCEEEEEEEEECCAB...',
+  '..GCHEEEEEEEEEECAB...',
+  '..GCIJJEEEEEJJECAB...',
+  '..GCKJJJEEEJJJECAB...',
+  '..GCKEJJEEEJJEECAB...',
+  '..GCLEEEMMMEEEECAB...',
+  '...ACEEEEEEEEECNOP...',
+  '....ACEEEEEEECAB.....',
+  '...AQQQQQQQQQQQAB....',
+  '..ARQQQSQQQQQQQQAB...',
+  '..ATQQQQSSSQQQQCAB...',
+  '..ACAQQSQSQSQQACAB...',
+  '...UAEEAAAAAEEAAAB...',
+  '....AMMAB..AVMAB.....',
+  '....AAAAB..AAAAB.....',
+];
+const HOODIE_MAP = { A: 'T', F: 'T', G: 'T', N: 'T', U: 'T', B: 'Q', O: 'Q', C: 'D', D: 'D', T: 'D', E: 'A', H: 'A', I: 'A', K: 'A', L: 'A', J: 'j', M: 'O', V: 'O', Q: 'i', R: 'i', S: 'W', P: '.' };
+// names shown on the character pick (rename freely)
+const CHARS = [
+  { name: 'SANTA', spr: sprite(SANTA_ROWS, SANTA_MAP, { trim: true }) },
+  { name: 'HOODIE', spr: sprite(HOODIE_ROWS, HOODIE_MAP, { trim: true }) },
+];
 
 function OVERLORD_ROWS(open) {
   return [
@@ -198,29 +275,7 @@ function OVERLORD_ROWS(open) {
     pad('P'.repeat(15), 23), pad('PpPpPpPpPpPpPpPpP', 23),
   ];
 }
-// Frostbyte kid: cyan cap with a snowflake (brim to the right), purple hair, snowflake hoodie
-const PLAYER_ROWS = [
-  '....ZZZZZZZ.....',
-  '...ZCcccccccZ...',
-  '..ZCcccwcwcccZ..',
-  '..ZcccccwccccdZ.',
-  '..ZccccwcwcccdZ.',
-  '.ZdddddddddddCCZ',
-  '.ZPZssssssssZZ..',
-  'ZPpZsZZssZZsZ...',
-  'ZPpZsZZssZZSZ...',
-  '.ZpZsssssssSZ...',
-  '..ZZsssZZsSZ....',
-  '...ZZsssssZZ....',
-  '..ZcZZZZZZZcZ...',
-  '.ZcCccwcwcccdZ..',
-  '.ZcCcccwccccdZ..',
-  '.ZcCccwcwcccdZ..',
-  '.ZddddddddddddZ.',
-  '..ZnnZ..ZnnZ....',
-  '..ZZZZ..ZZZZ....',
-];
-// alien popping out of its saucer (A/B = blinking lights + thruster flicker)
+// alien popping out of its saucer (A/B = blinking lights + thruster flicker); 'Z' = outline
 const UFO_A = [
   '....ZZZZZZ....',
   '...ZgwggggZ...',
@@ -235,7 +290,6 @@ const UFO_A = [
   '...ZoZ..ZoZ...',
 ];
 const UFO_B = UFO_A.map((r, j) => j === 7 ? 'ZPPyPPyPPyPPpZ' : j === 10 ? '...ZyZ..ZyZ...' : r);
-const RED = { g: 'o', G: 'R', P: 'r', p: 'R' };
 const MOTHER_ROWS = (lights, jets) => [
   pad('gggggggg', 28), pad('ggZZggggZZgg', 28), pad('CC' + 'g'.repeat(12) + 'CC', 28),
   pad('C'.repeat(20), 28), pad('p' + 'P'.repeat(22) + 'p', 28), pad('p' + lights.repeat(6) + 'P', 28),
@@ -246,22 +300,24 @@ const SNATCH_ROWS = (lights) => [
   pad('o' + 'r'.repeat(24) + 'o', 32), pad('o' + lights.repeat(6) + 'o', 32), pad('R'.repeat(28), 32), pad('R'.repeat(20), 32),
   pad('S', 32), pad('S', 32), pad('SSSSSSSSS', 32), pad('S.......S', 32), pad('S.......S', 32),
 ];
+// outline tints (dark versions of each sprite's main color, like the references)
+const PURPLE_OL = { Z: 'u' }, RED_OL = { g: 'o', G: 'R', P: 'r', p: 'R', Z: 'x' };
+const BOSS_STYLE = (ol) => ({ shade: true, outline: ol, shadow: SHADOW });
 
 const SPR = {
-  player: sprite(PLAYER_ROWS),
-  ufo1a: sprite(UFO_A), ufo1b: sprite(UFO_B),
-  ufo2a: sprite(UFO_A, RED), ufo2b: sprite(UFO_B, RED),
+  ufo1a: sprite(UFO_A, PURPLE_OL, { shadow: SHADOW }), ufo1b: sprite(UFO_B, PURPLE_OL, { shadow: SHADOW }),
+  ufo2a: sprite(UFO_A, RED_OL, { shadow: SHADOW }), ufo2b: sprite(UFO_B, RED_OL, { shadow: SHADOW }),
   // boss 1: Mothership
-  bossA: sprite(MOTHER_ROWS('PPPy', 'm.....m.....m.....m'), null, STYLE),
-  bossB: sprite(MOTHER_ROWS('PPyP', 'M.....M.....M.....M'), null, STYLE),
+  bossA: sprite(MOTHER_ROWS('PPPy', 'm.....m.....m.....m'), null, BOSS_STYLE(P.u)),
+  bossB: sprite(MOTHER_ROWS('PPyP', 'M.....M.....M.....M'), null, BOSS_STYLE(P.u)),
   // boss 2: Cake Snatcher (claw carries the stolen party cake, drawn separately)
-  snatchA: sprite(SNATCH_ROWS('ryrr'), null, STYLE),
-  snatchB: sprite(SNATCH_ROWS('rrry'), null, STYLE),
+  snatchA: sprite(SNATCH_ROWS('ryrr'), null, BOSS_STYLE(P.x)),
+  snatchB: sprite(SNATCH_ROWS('rrry'), null, BOSS_STYLE(P.x)),
   // boss 3: Alien Overlord (B = mouth open, eyes glowing red before a ring attack)
-  overA: sprite(OVERLORD_ROWS(false), null, STYLE),
-  overB: sprite(OVERLORD_ROWS(true), { w: 'r' }, STYLE),
-  orb: sprite(['..ZZZ..', '.ZMwMZ.', 'ZMwwMPZ', 'ZMMMMPZ', 'ZPMMPpZ', '.ZPppZ.', '..ZZZ..']),
-  // ally: Agent Delta from Planet Delta (pixel-for-pixel from the character art, 19x18)
+  overA: sprite(OVERLORD_ROWS(false), null, BOSS_STYLE(P.t)),
+  overB: sprite(OVERLORD_ROWS(true), { w: 'r' }, BOSS_STYLE(P.t)),
+  orb: sprite(['..ZZZ..', '.ZMwMZ.', 'ZMwwMPZ', 'ZMMMMPZ', 'ZPMMPpZ', '.ZPppZ.', '..ZZZ..'], PURPLE_OL),
+  // ally: Agent Delta from Planet Delta (pixel-for-pixel from the character art, 19x18) + drop shadow
   ally: sprite([
     '..KKK.KKKKKKKKKK...',
     '.KFFFKKFFFFFffKKKK.',
@@ -281,13 +337,13 @@ const SPR = {
     '..KwwwLLLlllacwKK..',
     '.KKwwwwLLLlcccwwK..',
     '.KwwwwwwwLLlwwwwwK.',
-  ], { K: 'Z', c: 'q', w: 'W' }),
-  // pickups (9px, outlined)
-  cake: sprite(['....y....', '...ZoZ...', '...ZwZ...', '.ZZZZZZZ.', 'ZwMwMwMwZ', 'ZMmMmMmmZ', 'ZFFFFFFfZ', 'ZmmmmmmRZ', '.ZZZZZZZ.']),
-  flake: sprite(['....Z....', '...ZwZ...', '..ZwCCZ..', '.ZwCCCdZ.', 'ZwCCwCCdZ', '.ZCCCCdZ.', '..ZCCdZ..', '...ZdZ...', '....Z....']),
-  heart: sprite(['.ZZZ.ZZZ.', 'ZrwrZrrrZ', 'ZrrrrrrRZ', 'ZrrrrrrRZ', '.ZrrrrRZ.', '..ZrrRZ..', '...ZRZ...', '....Z....']),
-  heartS: sprite(['.ZZ.ZZ.', 'ZrwZrrZ', 'ZrrrrRZ', '.ZrrRZ.', '..ZRZ..', '...Z...']),
-  heartE: sprite(['.ZZ.ZZ.', 'ZnnZnnZ', 'ZnnnnnZ', '.ZnnnZ.', '..ZnZ..', '...Z...']),
+  ], { K: 'Z', c: 'q', w: 'W' }, { shadow: SHADOW }),
+  // pickups (9px, tinted outline + drop shadow)
+  cake: sprite(['....y....', '...ZoZ...', '...ZwZ...', '.ZZZZZZZ.', 'ZwMwMwMwZ', 'ZMmMmMmmZ', 'ZFFFFFFfZ', 'ZmmmmmmRZ', '.ZZZZZZZ.'], { Z: 'T' }, { shadow: SHADOW }),
+  flake: sprite(['....Z....', '...ZwZ...', '..ZwCCZ..', '.ZwCCCdZ.', 'ZwCCwCCdZ', '.ZCCCCdZ.', '..ZCCdZ..', '...ZdZ...', '....Z....'], { Z: 'U' }, { shadow: SHADOW }),
+  heart: sprite(['.ZZZ.ZZZ.', 'ZrwrZrrrZ', 'ZrrrrrrRZ', 'ZrrrrrrRZ', '.ZrrrrRZ.', '..ZrrRZ..', '...ZRZ...', '....Z....'], { Z: 'x' }, { shadow: SHADOW }),
+  heartS: sprite(['.ZZ.ZZ.', 'ZrwZrrZ', 'ZrrrrRZ', '.ZrrRZ.', '..ZRZ..', '...Z...'], { Z: 'x' }),
+  heartE: sprite(['.ZZ.ZZ.', 'ZnnZnnZ', 'ZnnnnnZ', '.ZnnnZ.', '..ZnZ..', '...Z...'], { Z: 'T' }),
   snow: sprite(['.C.', 'CwC', '.C.']),
 };
 
@@ -372,6 +428,8 @@ const SFX = {
 /* ------------------------------------------------------------- high score */
 function loadBest() { try { return parseInt(localStorage.getItem('fb2_best') || '0', 10) || 0; } catch (e) { return 0; } }
 function saveBest(v) { try { localStorage.setItem('fb2_best', String(v)); } catch (e) { /* storage blocked in embeds: fine */ } }
+function loadChar() { try { return (parseInt(localStorage.getItem('fb2_char') || '0', 10) || 0) % 2; } catch (e) { return 0; } }
+function saveChar(v) { try { localStorage.setItem('fb2_char', String(v)); } catch (e) { /* fine */ } }
 
 /* -------------------------------------------------------------- background */
 const stars = Array.from({ length: 46 }, () => ({ x: (Math.random() * W) | 0, y: (Math.random() * 118) | 0, p: Math.random() * 6.28, ci: (Math.random() * 3) | 0 }));
@@ -579,13 +637,14 @@ function drawBackground(t) {
 }
 
 /* -------------------------------------------------------------- game state */
-const G = { state: 'title', t: 0, score: 0, best: loadBest(), newBest: false, lives: 3, wave: 1, kills: 0, waveKills: 0,
+const G = { state: 'title', t: 0, score: 0, best: loadBest(), char: loadChar(), newBest: false, lives: 3, wave: 1, kills: 0, waveKills: 0,
   spawn: 1, bossCount: 0, shake: 0, flash: 0, banner: null, overT: 0, prevState: 'play' };
 let player, bullets, ebullets, enemies, pickups, parts, boss;
 parts = [];
 
 function reset() {
-  player = { x: 80, y: 131, tx: 80, fire: 0, triple: 0, shield: 0, inv: 1 };
+  const ph = CHARS[G.char].spr.height;
+  player = { x: 80, y: 150 - ph, h: ph, tx: 80, fire: 0, triple: 0, shield: 0, inv: 1 };
   bullets = []; ebullets = []; enemies = []; pickups = []; parts = []; boss = null;
   Object.assign(G, { score: 0, newBest: false, lives: 3, wave: 1, kills: 0, waveKills: 0, spawn: 1.2, bossCount: 0, shake: 0, flash: 0, overT: 0 });
   setTheme(0); bgState.nameT = 0;
@@ -1089,7 +1148,7 @@ function update(dt) {
       }
     }
     // collide with player
-    if (Math.abs(e.x - pl.x) < 11 && e.y + 9 > pl.y + 4 && e.y < pl.y + 17) {
+    if (Math.abs(e.x - pl.x) < 11 && e.y + 9 > pl.y + pl.h * 0.25 && e.y < pl.y + pl.h - 2) {
       enemies.splice(i, 1); burst(e.x, e.y + 3, [P.g, P.P], 12, 50); SFX.boom(); hurtPlayer(); continue;
     }
     // landed: lose a heart
@@ -1123,7 +1182,7 @@ function update(dt) {
   for (let i = ebullets.length - 1; i >= 0; i--) {
     const b = ebullets[i]; b.x += b.vx * dt; b.y += b.vy * dt;
     if (b.y > 152 || b.y < -6 || b.x < -6 || b.x > W + 6) { ebullets.splice(i, 1); continue; }
-    if (Math.abs(b.x - pl.x) < 6 && b.y > pl.y + 4 && b.y < pl.y + 18) { ebullets.splice(i, 1); hurtPlayer(); }
+    if (Math.abs(b.x - pl.x) < 6 && b.y > pl.y + pl.h * 0.25 && b.y < pl.y + pl.h - 1) { ebullets.splice(i, 1); hurtPlayer(); }
   }
   if (G.state !== 'play') { updParts(dt); return; }
 
@@ -1131,7 +1190,7 @@ function update(dt) {
   for (let i = pickups.length - 1; i >= 0; i--) {
     const k = pickups[i]; k.t += dt; k.y += 26 * dt;
     if (k.y > 146) { pickups.splice(i, 1); continue; }
-    if (Math.abs(k.x - pl.x) < 10 && k.y + 9 > pl.y && k.y < pl.y + 18) {
+    if (Math.abs(k.x - pl.x) < 11 && k.y + 9 > pl.y && k.y < pl.y + pl.h) {
       pickups.splice(i, 1); SFX.power();
       burst(k.x, k.y + 3, CONFETTI, 18, 50);
       if (k.type === 'cake') { pl.triple = 9; banner('PARTY CAKE!', 'TRIPLE SNOWBALLS', 1.2, P.M); }
@@ -1170,15 +1229,15 @@ function drawMute() {
   if (muted) { ctx.fillStyle = P.r; ctx.fillRect(x + 5, y, 1, 1); ctx.fillRect(x + 6, y + 1, 1, 1); ctx.fillRect(x + 7, y + 2, 1, 1); ctx.fillRect(x + 6, y + 3, 1, 1); ctx.fillRect(x + 5, y + 4, 1, 1); ctx.fillRect(x + 7, y, 1, 1); ctx.fillRect(x + 7, y + 4, 1, 1); ctx.fillRect(x + 5, y + 2, 1, 1); }
   else { ctx.fillRect(x + 5, y + 1, 1, 3); ctx.fillRect(x + 7, y, 1, 5); }
 }
-function drawPlayer(x, y, sc = 1) {
-  const s = SPR.player;
+function drawPlayer(x, y, sc = 1, ci = G.char) {
+  const s = CHARS[ci].spr;
   ctx.drawImage(s, Math.round(x - (s.width >> 1) * sc), Math.round(y), s.width * sc, s.height * sc);
 }
 function drawShield(x, y) {
   ctx.fillStyle = ((G.t * 8) | 0) % 2 ? P.C : P.c;
   for (let a = 0; a < 20; a++) {
     const ang = a / 20 * 6.283 + G.t * 2;
-    ctx.fillRect(Math.round(x + Math.cos(ang) * 12), Math.round(y + 9 + Math.sin(ang) * 12), 1, 1);
+    ctx.fillRect(Math.round(x + Math.cos(ang) * 13), Math.round(y + (player.h >> 1) + Math.sin(ang) * 13), 1, 1);
   }
 }
 
@@ -1216,24 +1275,33 @@ function drawTitle() {
   text('2ND ANNIVERSARY', 80, 37, P.M, 1, 'c');
   text('ALIEN DEFENSE', 80, 46, P.w, 2, 'c', P.n);
 
-  // hero + saucers
-  const bob = Math.round(Math.sin(t * 3) * 2);
-  drawPlayer(80, 67 + bob, 2);
+  // character pick: tap a Frostbyte to play as it (or arrows + space)
+  CHARS.forEach((ch, i) => {
+    const sel = i === G.char, s = ch.spr, cx = CHAR_X[i];
+    const bob = sel ? Math.round(Math.sin(t * 4) * 2) : 0;
+    const top = 104 - s.height * 2 + bob;
+    drawPlayer(cx, top, 2, i);
+    if (sel) { // little arrow over the picked one
+      ctx.fillStyle = P.y;
+      const ay = 58 + ((t * 4 | 0) % 2);
+      ctx.fillRect(cx - 2, ay, 5, 1); ctx.fillRect(cx - 1, ay + 1, 3, 1); ctx.fillRect(cx, ay + 2, 1, 1);
+    }
+    text(ch.name, cx, 107, sel ? P.y : P.S, 1, 'c');
+  });
+  // saucers lurking at the sides
   const f = ((t * 6) | 0) % 2;
-  for (let i = 0; i < 3; i++) {
-    const a = t * 1.3 + i * 2.094;
-    const ux = 80 + Math.cos(a) * 46, uy = 82 + Math.sin(a) * 10;
-    ctx.drawImage(i === 1 ? (f ? SPR.ufo2a : SPR.ufo2b) : (f ? SPR.ufo1a : SPR.ufo1b), Math.round(ux - 6), Math.round(uy));
-  }
+  ctx.drawImage(f ? SPR.ufo1a : SPR.ufo1b, 4, Math.round(68 + Math.sin(t * 2) * 3));
+  ctx.drawImage(f ? SPR.ufo2a : SPR.ufo2b, 141, Math.round(74 + Math.sin(t * 2 + 2) * 3));
   // birthday cake on the snow
   ctx.drawImage(SPR.cake, 17, 140);
   ctx.drawImage(SPR.cake, 134, 140);
 
-  if (((t * 2.2) | 0) % 2 === 0) text('TAP OR SPACE TO PLAY', 80, 112, P.C, 1, 'c');
-  text('DRAG / ARROWS TO MOVE', 80, 122, P.S, 1, 'c');
-  text('AUTO-FIRE ON', 80, 129, P.S, 1, 'c');
-  if (G.best > 0) text('BEST ' + G.best, 80, 140, P.y, 1, 'c');
+  if (((t * 2.2) | 0) % 2 === 0) text('TAP A FROSTBYTE TO PLAY', 80, 117, P.C, 1, 'c');
+  text('DRAG / ARROWS. AUTO-FIRE.', 80, 126, P.S, 1, 'c');
+  if (G.best > 0) text('BEST ' + G.best, 80, 136, P.y, 1, 'c');
 }
+const CHAR_X = [52, 108];
+function pickChar(i) { G.char = i; saveChar(i); }
 
 function drawBoss(f) {
   const b = boss, bx = Math.round(b.x), by = Math.round(b.y);
@@ -1380,7 +1448,10 @@ window.addEventListener('pointerdown', e => {
   try { cv.focus({ preventScroll: true }); } catch (_) {}
   const p = toLogical(e);
   if (inBtn(p, BTN.mute)) return; // handled on click
-  if (G.state === 'title') { startGame(); return; }
+  if (G.state === 'title') {
+    for (let i = 0; i < CHARS.length; i++) if (Math.abs(p.x - CHAR_X[i]) < 26 && p.y > 54 && p.y < 114) pickChar(i);
+    startGame(); return;
+  }
   if (G.state === 'paused') { G.state = 'play'; return; }
   if (G.state === 'over') return; // buttons on click
   ctrl = 'ptr';
@@ -1409,8 +1480,8 @@ window.addEventListener('keydown', e => {
   audioInit();
   const k = e.key;
   if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(k)) e.preventDefault();
-  if (k === 'ArrowLeft' || k === 'a' || k === 'A') { keys.left = true; ctrl = 'key'; }
-  if (k === 'ArrowRight' || k === 'd' || k === 'D') { keys.right = true; ctrl = 'key'; }
+  if (k === 'ArrowLeft' || k === 'a' || k === 'A') { keys.left = true; ctrl = 'key'; if (G.state === 'title') pickChar(0); }
+  if (k === 'ArrowRight' || k === 'd' || k === 'D') { keys.right = true; ctrl = 'key'; if (G.state === 'title') pickChar(1); }
   if (k === 'm' || k === 'M') muted = !muted;
   if (k === 'c' || k === 'C') {
     const off = crt.classList.toggle('off');
@@ -1447,7 +1518,7 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // test hook: open with ?debug to poke at state from the console
-if (/[?&]debug\b/.test(location.search)) window.__fb = { G, SPR, get player() { return player; }, get ally() { return ally; }, talk, say, get boss() { return boss; }, get ebullets() { return ebullets; }, get bullets() { return bullets; }, startGame, spawnBoss, nextWave, gameOver, bossDefeated, bgState, setTheme, THEMES, drawBackground, updateBg, update, draw };
+if (/[?&]debug\b/.test(location.search)) window.__fb = { G, SPR, CHARS, pickChar, get player() { return player; }, get ally() { return ally; }, talk, say, get boss() { return boss; }, get ebullets() { return ebullets; }, get bullets() { return bullets; }, startGame, spawnBoss, nextWave, gameOver, bossDefeated, bgState, setTheme, THEMES, drawBackground, updateBg, update, draw };
 })();
 </script>
 </body>
