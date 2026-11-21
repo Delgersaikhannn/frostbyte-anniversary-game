@@ -2,15 +2,32 @@
 //   GET  /api/scores           -> { top: [{ name, score, wave }] }   best run per name, top 10
 //   POST /api/scores  { name, score, wave, secs }
 //                              -> { ok, rank, best, top }
-// Env vars (Vercel -> Project -> Settings -> Environment Variables):
-//   SUPABASE_SERVICE_ROLE_KEY  required, the service_role / secret key (never sent to browsers)
+// Env vars (Vercel -> Project -> Settings -> Environment Variables), see .env.example:
+//   SUPABASE_SECRET_KEY        required: the secret key (sb_secret_...) or the legacy service_role
+//                              key. SUPABASE_SERVICE_ROLE_KEY is accepted as the same thing.
+//                              Server-side only, never sent to browsers.
 //   SUPABASE_URL               optional, defaults to this project's Supabase URL
+//   IP_SALT                    optional, salt for the rate-limit IP hash
 // Table + view: see supabase/leaderboard.sql.
 
 const crypto = require('crypto');
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || 'https://dkgwmqujhxwnzrnxiswm.supabase.co').replace(/\/$/, '');
-const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const KEY = (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+
+// The public publishable/anon keys can't read or write the locked-down table; say so clearly.
+function keyProblem(k) {
+  if (!k) return 'leaderboard not configured';
+  if (k.startsWith('sb_publishable_')) return 'wrong key: use the Supabase secret key, not the publishable key';
+  if (k.startsWith('eyJ')) {
+    try {
+      const role = JSON.parse(Buffer.from(k.split('.')[1], 'base64url').toString()).role;
+      if (role !== 'service_role') return 'wrong key: use the service_role key, not the anon key';
+    } catch (e) { return 'unreadable Supabase key'; }
+  }
+  return '';
+}
+const KEY_PROBLEM = keyProblem(KEY);
 const TOP_N = 10;
 const NAME_RE = /^[A-Z0-9_]{1,15}$/;
 const MAX_POINTS_PER_SEC = 300; // generous ceiling; real runs score far less
@@ -60,7 +77,7 @@ function validate(body) {
 
 module.exports = async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
-  if (!KEY) return res.status(503).json({ error: 'leaderboard not configured' });
+  if (KEY_PROBLEM) return res.status(503).json({ error: KEY_PROBLEM });
   try {
     if (req.method === 'GET') {
       res.setHeader('Cache-Control', 'public, s-maxage=10, stale-while-revalidate=30');
