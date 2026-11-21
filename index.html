@@ -36,10 +36,66 @@
     display: block; image-rendering: pixelated; image-rendering: crisp-edges;
     cursor: crosshair; outline: none;
   }
+
+  /* ------------------------------------------------------------ CRT screen */
+  /* --px (one game pixel in CSS px) is set by fit() so scanlines line up with game rows */
+  #crt {
+    --px: 3px;
+    position: relative; overflow: hidden; border-radius: 2.5%;
+    background: #000;
+    box-shadow: 0 0 calc(var(--px) * 10) rgba(46, 196, 230, .14);
+  }
+  #crt canvas#c { filter: saturate(1.15) contrast(1.06) brightness(1.06); }
+  /* phosphor bloom: a blurred copy of each frame, added on top */
+  #glow {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    pointer-events: none; mix-blend-mode: screen; opacity: .45;
+    filter: blur(calc(var(--px) * 1.1));
+  }
+  .crt-fx { position: absolute; inset: 0; pointer-events: none; }
+  /* scanlines (one per game row) + faint RGB aperture grille */
+  .crt-lines {
+    background:
+      linear-gradient(to bottom, transparent 0 50%, rgba(0, 0, 0, .3) 50% 100%) 0 0 / 100% var(--px),
+      repeating-linear-gradient(90deg, rgba(255, 40, 80, .05) 0 1px, rgba(60, 255, 120, .035) 1px 2px, rgba(60, 120, 255, .05) 2px 3px);
+  }
+  /* curved-glass vignette, edge shading and a soft highlight */
+  .crt-glass {
+    background:
+      radial-gradient(ellipse 120% 90% at 30% 12%, rgba(255, 255, 255, .06), transparent 45%),
+      radial-gradient(ellipse at center, transparent 58%, rgba(0, 0, 0, .55) 100%);
+    box-shadow: inset 0 0 calc(var(--px) * 6) rgba(0, 0, 0, .7);
+    border-radius: inherit;
+    animation: crt-flicker 3.2s steps(1) infinite;
+  }
+  /* slow rolling refresh band */
+  .crt-roll {
+    top: -25%; height: 25%; bottom: auto;
+    background: linear-gradient(to bottom, transparent, rgba(180, 240, 255, .045) 50%, transparent);
+    animation: crt-roll 7s linear infinite;
+  }
+  @keyframes crt-roll { to { transform: translateY(500%); } }
+  @keyframes crt-flicker {
+    0%, 100% { opacity: 1; } 31% { opacity: .9; } 32% { opacity: 1; }
+    67% { opacity: .94; } 68% { opacity: 1; } 89% { opacity: .92; } 90% { opacity: 1; }
+  }
+  #crt.off { border-radius: 0; box-shadow: none; }
+  #crt.off canvas#c { filter: none; }
+  #crt.off #glow, #crt.off .crt-fx { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .crt-glass { animation: none; }
+    .crt-roll { display: none; }
+  }
 </style>
 </head>
 <body>
-<canvas id="c" tabindex="0" aria-label="Frostbyte Alien Defense game"></canvas>
+<div id="crt">
+  <canvas id="c" tabindex="0" aria-label="Frostbyte Alien Defense game"></canvas>
+  <canvas id="glow" aria-hidden="true"></canvas>
+  <div class="crt-fx crt-lines"></div>
+  <div class="crt-fx crt-roll"></div>
+  <div class="crt-fx crt-glass"></div>
+</div>
 <script>
 (() => {
 'use strict';
@@ -52,10 +108,19 @@ const ctx = cv.getContext('2d');
 cv.width = W; cv.height = H;
 ctx.imageSmoothingEnabled = false;
 
+// CRT overlay: bloom canvas mirrors each frame; press C to toggle the effect
+const crt = document.getElementById('crt');
+const glow = document.getElementById('glow');
+const gctx = glow.getContext('2d');
+glow.width = W; glow.height = H;
+try { if (localStorage.getItem('fb-crt') === 'off') crt.classList.add('off'); } catch (_) {}
+
 function fit() {
   const s = Math.min(window.innerWidth / W, window.innerHeight / H);
-  cv.style.width = Math.floor(W * s) + 'px';
-  cv.style.height = Math.floor(H * s) + 'px';
+  const cw = Math.floor(W * s), ch = Math.floor(H * s);
+  cv.style.width = cw + 'px';
+  cv.style.height = ch + 'px';
+  crt.style.setProperty('--px', (ch / H) + 'px');
 }
 window.addEventListener('resize', fit);
 fit();
@@ -728,6 +793,10 @@ window.addEventListener('keydown', e => {
   if (k === 'ArrowLeft' || k === 'a' || k === 'A') { keys.left = true; ctrl = 'key'; }
   if (k === 'ArrowRight' || k === 'd' || k === 'D') { keys.right = true; ctrl = 'key'; }
   if (k === 'm' || k === 'M') muted = !muted;
+  if (k === 'c' || k === 'C') {
+    const off = crt.classList.toggle('off');
+    try { localStorage.setItem('fb-crt', off ? 'off' : 'on'); } catch (_) {}
+  }
   if (k === ' ' || k === 'Enter') {
     if (G.state === 'title') startGame();
     else if (G.state === 'over' && G.overT > 0.8) startGame();
@@ -753,6 +822,7 @@ function frame(now) {
   acc += d;
   while (acc >= STEP) { update(STEP); acc -= STEP; }
   draw();
+  if (!crt.classList.contains('off')) { gctx.clearRect(0, 0, W, H); gctx.drawImage(cv, 0, 0); }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
