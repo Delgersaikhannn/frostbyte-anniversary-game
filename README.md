@@ -30,6 +30,11 @@ Aliens crashed the birthday party: drag (or use arrow keys) to move, snowballs f
   Cosmic Nebula, Synth Sunset, Alien World, Fireworks, Balloon Party) with a pixel-dither dissolve.
   Tweak `THEME_EVERY` in `index.html` to change the interval.
 - Game over screen has a **Share score on X** button.
+- **Curved CRT tube**: a WebGL pass bends the picture like real glass. The middle bulges toward
+  you while the edges and corners curve away into shadow, with scanlines that follow the curve and
+  slight color fringing at the edges. The CSS layers on top add bloom, glass shading, flicker and
+  the roll band. Taps, drags and the leaderboard name box all follow the curve. Adjust `CURVE` in
+  `index.html` (lower = rounder); without WebGL it falls back to the flat CRT overlay.
 
 It's one self-contained file (`index.html`): no build step, no dependencies, no external requests.
 

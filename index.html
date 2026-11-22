@@ -79,6 +79,15 @@
     0%, 100% { opacity: 1; } 31% { opacity: .9; } 32% { opacity: 1; }
     67% { opacity: .94; } 68% { opacity: 1; } 89% { opacity: .92; } 90% { opacity: 1; }
   }
+  /* curved glass (WebGL): replaces the flat picture and its straight scanlines */
+  #scr {
+    position: absolute; inset: 0; width: 100%; height: 100%; display: none; pointer-events: none;
+    filter: saturate(1.15) contrast(1.06) brightness(1.06);
+  }
+  #crt.curved { border-radius: 5%; }
+  #crt.curved #scr { display: block; }
+  #crt.curved canvas#c { visibility: hidden; }
+  #crt.curved .crt-lines { display: none; }
   #crt.off { border-radius: 0; box-shadow: none; }
   #crt.off canvas#c { filter: none; }
   #crt.off #glow, #crt.off .crt-fx { display: none; }
@@ -105,6 +114,7 @@
 <body>
 <div id="crt">
   <canvas id="c" tabindex="0" aria-label="Frostbyte Alien Defense game"></canvas>
+  <canvas id="scr" aria-hidden="true"></canvas>
   <canvas id="glow" aria-hidden="true"></canvas>
   <div class="crt-fx crt-lines"></div>
   <div class="crt-fx crt-roll"></div>
@@ -131,12 +141,108 @@ const gctx = glow.getContext('2d');
 glow.width = W; glow.height = H;
 try { if (localStorage.getItem('fb-crt') === 'off') crt.classList.add('off'); } catch (_) {}
 
+// Curved glass: a WebGL pass bends the picture like a real CRT tube. The middle
+// bulges toward you; edges and corners curve away into shadow, with scanlines that
+// follow the curve and a little color fringing at the edges. The CSS layers above
+// still add bloom, glass shading, flicker and the roll band. C toggles it all.
+const CURVE = 3.0; // lower = rounder screen
+const scr = document.getElementById('scr');
+const curve = initCurve();
+const curved = () => !!curve && !crt.classList.contains('off');
+
+// screen position (0..1) -> game position (0..1); must match warp() in the shader
+function warp(u, v) {
+  let x = u * 2 - 1, y = v * 2 - 1;
+  const ox = Math.abs(y) / CURVE, oy = Math.abs(x) / CURVE;
+  x += x * ox * ox; y += y * oy * oy;
+  return [x * 0.5 + 0.5, y * 0.5 + 0.5];
+}
+// game position (0..1) -> where it shows on the curved screen
+function unwarp(gu, gv) {
+  let u = gu, v = gv;
+  for (let i = 0; i < 24; i++) { const [a, b] = warp(u, v); u -= (a - gu) * 0.8; v -= (b - gv) * 0.8; }
+  return [u, v];
+}
+function initCurve() {
+  try {
+    const gl = scr.getContext('webgl', { antialias: false, alpha: false });
+    if (!gl) return null;
+    const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER,
+      'attribute vec2 p; varying vec2 v;' +
+      'void main(){ v = vec2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5); gl_Position = vec4(p, 0.0, 1.0); }'));
+    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, `
+      #ifdef GL_FRAGMENT_PRECISION_HIGH
+      precision highp float;
+      #else
+      precision mediump float;
+      #endif
+      uniform sampler2D t; uniform float curve, sharp;
+      varying vec2 v;
+      vec2 warp(vec2 uv) { uv = uv * 2.0 - 1.0; vec2 o = abs(uv.yx) / curve; uv += uv * o * o; return uv * 0.5 + 0.5; }
+      vec3 tap(vec2 uv) { // crisp game pixels with smooth edges
+        vec2 px = uv * 160.0, c = floor(px) + 0.5, d = clamp((px - c) * sharp, -0.5, 0.5);
+        return texture2D(t, (c + d) / 160.0).rgb;
+      }
+      void main() {
+        vec2 uv = warp(v);
+        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { // tube edge: black with a faint rim glow
+          vec2 q = max(abs(uv - 0.5) - 0.5, 0.0);
+          gl_FragColor = vec4(vec3(0.06, 0.05, 0.13) * exp(-length(q) * 70.0), 1.0);
+          return;
+        }
+        vec2 dir = uv - 0.5;
+        vec3 col = vec3(tap(uv + dir * 0.0016).r, tap(uv).g, tap(uv - dir * 0.0016).b); // fringe grows toward edges
+        col *= 0.9 + 0.1 * sin(uv.y * 160.0 * 6.2831853);                                // scanlines on the curve
+        col *= pow(uv.x * uv.y * (1.0 - uv.x) * (1.0 - uv.y) * 15.0, 0.2);              // corners fall away into shadow
+        col += vec3(0.04, 0.05, 0.07) * smoothstep(0.55, 0.0, length((v - vec2(0.38, 0.3)) * vec2(1.0, 1.3))); // glass bulge
+        vec2 e = smoothstep(0.0, 0.006, uv) * smoothstep(0.0, 0.006, 1.0 - uv);         // soft rounded edge
+        gl_FragColor = vec4(col * 1.1 * e.x * e.y, 1.0);
+      }`));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+    gl.useProgram(prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'p');
+    gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+    for (const [k, val] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]])
+      gl.texParameteri(gl.TEXTURE_2D, k, val);
+    gl.uniform1f(gl.getUniformLocation(prog, 'curve'), CURVE);
+    return { gl, sharp: gl.getUniformLocation(prog, 'sharp') };
+  } catch (e) { return null; }
+}
+function present() {
+  if (!curved()) return;
+  const gl = curve.gl;
+  gl.viewport(0, 0, scr.width, scr.height);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv);
+  gl.uniform1f(curve.sharp, Math.max(1, scr.height / H));
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+// the leaderboard name box is HTML over the game: move it to where its box shows on the curve
+function placeNameBox() {
+  const st = nameIn.style;
+  if (!curved()) { st.left = st.top = st.width = st.height = ''; return; }
+  const w = cv.clientWidth, h = cv.clientHeight;
+  const L = unwarp(22 / W, 55.5 / H)[0], Rr = unwarp(104 / W, 55.5 / H)[0];
+  const T = unwarp(63 / W, 50 / H)[1], B = unwarp(63 / W, 61 / H)[1];
+  st.left = L * w + 'px'; st.top = T * h + 'px'; st.width = (Rr - L) * w + 'px'; st.height = (B - T) * h + 'px';
+}
+let curveReady = false; // set once the name box exists
+function syncCurve() { crt.classList.toggle('curved', curved()); placeNameBox(); }
+
 function fit() {
   const s = Math.min(window.innerWidth / W, window.innerHeight / H);
   const cw = Math.floor(W * s), ch = Math.floor(H * s);
   cv.style.width = cw + 'px';
   cv.style.height = ch + 'px';
   crt.style.setProperty('--px', (ch / H) + 'px');
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  scr.width = Math.min(1600, Math.round(cw * dpr)); scr.height = Math.min(1600, Math.round(ch * dpr));
+  if (curveReady) syncCurve();
 }
 window.addEventListener('resize', fit);
 fit();
@@ -495,6 +601,7 @@ const SFX = {
 // When it can't be reached (local file, GitHub Pages copy) the board says OFFLINE.
 const LB_API = '/api/scores';
 const nameIn = document.getElementById('nameIn');
+curveReady = true; syncCurve();
 const LB = { status: 'idle', top: [], sent: false, busy: false, rank: 0, msg: '', name: '' };
 try { nameIn.value = localStorage.getItem('fb2_name') || ''; } catch (e) { /* fine */ }
 const cleanName = s => String(s).trim().replace(/^@/, '').toUpperCase();
@@ -1606,9 +1713,11 @@ const keys = { left: false, right: false };
 let ctrl = 'ptr';
 let drag = null;
 
-function toLogical(e) {
+function toLogical(e) { // screen point -> game pixel, following the CRT curve
   const r = cv.getBoundingClientRect();
-  return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+  let u = (e.clientX - r.left) / r.width, v = (e.clientY - r.top) / r.height;
+  if (curved()) [u, v] = warp(u, v);
+  return { x: u * W, y: v * H };
 }
 const inBtn = (p, b) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
 
@@ -1670,6 +1779,7 @@ window.addEventListener('keydown', e => {
   if (k === 'c' || k === 'C') {
     const off = crt.classList.toggle('off');
     try { localStorage.setItem('fb-crt', off ? 'off' : 'on'); } catch (_) {}
+    syncCurve();
   }
   if (G.state === 'board') { // any of these go back to the title
     if ([' ', 'Enter', 'Escape', 'Backspace', 'l', 'L'].includes(k)) { e.preventDefault(); closeBoard(); }
@@ -1702,14 +1812,16 @@ function frame(now) {
   acc += d;
   while (acc >= STEP) { update(STEP); acc -= STEP; }
   draw();
+  present();
   syncNameBox();
-  if (!crt.classList.contains('off')) { gctx.clearRect(0, 0, W, H); gctx.drawImage(cv, 0, 0); }
+  // bloom follows the curved picture when it is on
+  if (!crt.classList.contains('off')) { gctx.clearRect(0, 0, W, H); gctx.drawImage(curved() ? scr : cv, 0, 0, W, H); }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
 // test hook: open with ?debug to poke at state from the console
-if (/[?&]debug\b/.test(location.search)) window.__fb = { G, SPR, CHARS, get player() { return player; }, get ally() { return ally; }, talk, say, get boss() { return boss; }, get ebullets() { return ebullets; }, get bullets() { return bullets; }, get pickups() { return pickups; }, dropPickup, boardRow, startGame, spawnBoss, nextWave, gameOver, bossDefeated, bgState, setTheme, THEMES, drawBackground, updateBg, update, draw };
+if (/[?&]debug\b/.test(location.search)) window.__fb = { G, SPR, CHARS, LB, syncNameBox, present, warp, unwarp, curved, syncCurve, get player() { return player; }, get ally() { return ally; }, talk, say, get boss() { return boss; }, get ebullets() { return ebullets; }, get bullets() { return bullets; }, get pickups() { return pickups; }, dropPickup, boardRow, startGame, spawnBoss, nextWave, gameOver, bossDefeated, bgState, setTheme, THEMES, drawBackground, updateBg, update, draw };
 })();
 </script>
 </body>
