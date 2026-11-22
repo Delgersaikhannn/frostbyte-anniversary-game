@@ -526,6 +526,15 @@ function closeBoard() { G.state = 'title'; }
 const RANK_COL = ['#ffd23f', '#c9d6e8', '#e0894a'];
 const isMe = name => !!name && name === (LB.name || cleanName(nameIn.value));
 function rowColor(i, name) { return RANK_COL[i] || (isMe(name) ? P.C : P.s); }
+// one leaderboard row: name from nameX, score right-aligned at scoreRight. The name is
+// shortened with '..' if it would come closer than 6px to the score.
+function boardRow(name, score, nameX, scoreRight, y, col) {
+  const s = String(score), room = scoreRight - textW(s) - 6 - nameX;
+  let n = name;
+  if (textW(n) > room) { while (n.length && textW(n + '..') > room) n = n.slice(0, -1); n += '..'; }
+  text(n, nameX, y, col, 1);
+  text(s, scoreRight, y, col, 1, 'r');
+}
 function meArrow(x, y) { // small right-pointing arrow, 3x5
   ctx.fillStyle = P.C;
   ctx.fillRect(x, y, 1, 5); ctx.fillRect(x + 1, y + 1, 1, 3); ctx.fillRect(x + 2, y + 2, 1, 1);
@@ -1446,8 +1455,7 @@ function drawLeaderboard() {
       if (i < 3) { ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(16, y - 2, 128, 9); }
       if (isMe(row.name)) meArrow(11, y);
       text((i + 1) + '.', 28, y, col, 1, 'r');
-      text(row.name, 32, y, col, 1);
-      text(String(row.score), 142, y, col, 1, 'r');
+      boardRow(row.name, row.score, 32, 142, y, col);
     });
   }
   box(BTN.back, 'BACK', P.C);
@@ -1589,8 +1597,7 @@ function drawBoard() {
     const y = 78 + i * 6, col = rowColor(i, row.name);
     if (isMe(row.name)) meArrow(17, y);
     text((i + 1) + '.', 22, y, col, 1);
-    text(row.name, 32, y, col, 1);
-    text(String(row.score), 138, y, col, 1, 'r');
+    boardRow(row.name, row.score, 32, 138, y, col);
   });
 }
 
@@ -1702,7 +1709,7 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // test hook: open with ?debug to poke at state from the console
-if (/[?&]debug\b/.test(location.search)) window.__fb = { G, SPR, CHARS, get player() { return player; }, get ally() { return ally; }, talk, say, get boss() { return boss; }, get ebullets() { return ebullets; }, get bullets() { return bullets; }, get pickups() { return pickups; }, dropPickup, startGame, spawnBoss, nextWave, gameOver, bossDefeated, bgState, setTheme, THEMES, drawBackground, updateBg, update, draw };
+if (/[?&]debug\b/.test(location.search)) window.__fb = { G, SPR, CHARS, get player() { return player; }, get ally() { return ally; }, talk, say, get boss() { return boss; }, get ebullets() { return ebullets; }, get bullets() { return bullets; }, get pickups() { return pickups; }, dropPickup, boardRow, startGame, spawnBoss, nextWave, gameOver, bossDefeated, bgState, setTheme, THEMES, drawBackground, updateBg, update, draw };
 })();
 </script>
 </body>
