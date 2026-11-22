@@ -42,6 +42,8 @@ It's one self-contained file (`index.html`): no build step, no dependencies, no 
 | Space / Enter / tap | Start, retry |
 | P / Esc | Pause |
 | M or speaker icon | Mute |
+| L or LEADERBOARD button (title screen) | Open the top 10; Esc / Space / BACK to return |
+| C | Toggle the CRT screen effect |
 
 ## Playing it inside an X post (player card)
 
@@ -64,7 +66,9 @@ The host must allow framing (no `X-Frame-Options: DENY`). Vercel and GitHub Page
 
 On the game over screen players type a name or X handle (letters, numbers and `_`, up to 15,
 stored in uppercase, a leading `@` is dropped) and tap **SAVE**. The board shows each name's best
-run, top 5 in game (the API returns the top 10). The name is remembered for next time.
+run, top 5 on the game over screen and the full top 10 from the title screen's **LEADERBOARD**
+button. Places 1-3 are gold, silver and bronze, and your own name gets a cyan arrow. The name is
+remembered for next time.
 
 - `api/scores.js` is a Vercel function: `GET /api/scores` returns the board, `POST` saves a score.
   It checks the name, rejects scores that aren't possible for the play time, and allows one

@@ -504,14 +504,31 @@ nameIn.addEventListener('input', () => {
   LB.msg = '';
 });
 
-async function lbOpen() {
-  Object.assign(LB, { status: 'loading', sent: false, busy: false, rank: 0, msg: '' });
+async function lbFetch() {
+  LB.status = 'loading';
   try {
     const r = await fetch(LB_API, { cache: 'no-store' });
     if (!r.ok) throw new Error(r.status);
     LB.top = (await r.json()).top || [];
     LB.status = 'ready';
   } catch (e) { LB.status = 'offline'; }
+}
+// game over: fresh board plus the name box
+function lbOpen() {
+  Object.assign(LB, { sent: false, busy: false, rank: 0, msg: '' });
+  lbFetch();
+}
+// title screen LEADERBOARD button: full top 10 on its own screen
+function openBoard() { G.state = 'board'; lbFetch(); }
+function closeBoard() { G.state = 'title'; }
+// medal colors for places 1-3 (gold, silver, bronze); your own name is cyan below that
+// and always gets a little arrow next to it
+const RANK_COL = ['#ffd23f', '#c9d6e8', '#e0894a'];
+const isMe = name => !!name && name === (LB.name || cleanName(nameIn.value));
+function rowColor(i, name) { return RANK_COL[i] || (isMe(name) ? P.C : P.s); }
+function meArrow(x, y) { // small right-pointing arrow, 3x5
+  ctx.fillStyle = P.C;
+  ctx.fillRect(x, y, 1, 5); ctx.fillRect(x + 1, y + 1, 1, 3); ctx.fillRect(x + 2, y + 2, 1, 1);
 }
 async function lbSubmit() {
   if (LB.busy || LB.sent || LB.status !== 'ready' || G.score <= 0) return;
@@ -1198,7 +1215,7 @@ const STEP = 1 / 60;
 function update(dt) {
   G.t += dt;
   updateBg(dt);
-  if (G.state === 'title') {
+  if (G.state === 'title' || G.state === 'board') {
     // show off the skies on the title screen
     bgState.titleT += dt;
     if (bgState.titleT > 5) { bgState.titleT = 0; setTheme((bgState.cur + 1) % THEMES.length); }
@@ -1329,6 +1346,8 @@ function update(dt) {
 /* -------------------------------------------------------------------- draw */
 const BTN = {
   save: { x: 107, y: 50, w: 31, h: 11 },
+  board: { x: 50, y: 141, w: 60, h: 11 },  // title screen
+  back: { x: 55, y: 137, w: 50, h: 12 },   // leaderboard screen
   retry: { x: 48, y: 112, w: 64, h: 12 },
   share: { x: 36, y: 128, w: 88, h: 12 },
   mute: { x: 148, y: 151, w: 11, h: 9 },
@@ -1365,6 +1384,7 @@ function draw() {
   drawBackground(G.t);
 
   if (G.state === 'title') drawTitle();
+  else if (G.state === 'board') drawLeaderboard();
   else drawPlay();
 
   // particles
@@ -1404,9 +1424,33 @@ function drawTitle() {
   ctx.drawImage(SPR.cake, 17, 140);
   ctx.drawImage(SPR.cake, 134, 140);
 
-  if (((t * 2.2) | 0) % 2 === 0) text('TAP OR SPACE TO PLAY', 80, 117, P.C, 1, 'c');
-  text('DRAG / ARROWS. AUTO-FIRE.', 80, 126, P.S, 1, 'c');
-  if (G.best > 0) text('BEST ' + G.best, 80, 136, P.y, 1, 'c');
+  if (((t * 2.2) | 0) % 2 === 0) text('TAP OR SPACE TO PLAY', 80, 115, P.C, 1, 'c');
+  text('DRAG / ARROWS. AUTO-FIRE.', 80, 123, P.S, 1, 'c');
+  if (G.best > 0) text('BEST ' + G.best, 80, 132, P.y, 1, 'c');
+  box(BTN.board, 'LEADERBOARD', P.y);
+}
+
+// full-screen top 10, opened from the title screen
+function drawLeaderboard() {
+  ctx.fillStyle = 'rgba(11,11,20,0.72)'; ctx.fillRect(0, 0, W, H);
+  text('LEADERBOARD', 80, 8, P.y, 2, 'c', P.p);
+  ctx.fillStyle = P.m; ctx.fillRect(22, 22, 116, 1);
+  if (LB.status === 'loading' || LB.status === 'idle') text('LOADING...', 80, 70, P.S, 1, 'c');
+  else if (LB.status === 'offline') text('LEADERBOARD OFFLINE', 80, 70, P.S, 1, 'c');
+  else if (!LB.top.length) {
+    text('NO SCORES YET.', 80, 64, P.S, 1, 'c');
+    text('BE THE FIRST!', 80, 72, P.C, 1, 'c');
+  } else {
+    LB.top.slice(0, 10).forEach((row, i) => {
+      const y = 29 + i * 10, col = rowColor(i, row.name);
+      if (i < 3) { ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(16, y - 2, 128, 9); }
+      if (isMe(row.name)) meArrow(11, y);
+      text((i + 1) + '.', 28, y, col, 1, 'r');
+      text(row.name, 32, y, col, 1);
+      text(String(row.score), 142, y, col, 1, 'r');
+    });
+  }
+  box(BTN.back, 'BACK', P.C);
 }
 
 function drawBoss(f) {
@@ -1542,8 +1586,8 @@ function drawBoard() {
   if (LB.status === 'offline') { text('LEADERBOARD OFFLINE', 80, 86, P.S, 1, 'c'); return; }
   if (!LB.top.length) { text('NO SCORES YET. BE FIRST!', 80, 86, P.S, 1, 'c'); return; }
   LB.top.slice(0, 5).forEach((row, i) => {
-    const y = 78 + i * 6, me = LB.sent && row.name === LB.name;
-    const col = me ? P.y : i === 0 ? P.w : P.s;
+    const y = 78 + i * 6, col = rowColor(i, row.name);
+    if (isMe(row.name)) meArrow(17, y);
     text((i + 1) + '.', 22, y, col, 1);
     text(row.name, 32, y, col, 1);
     text(String(row.score), 138, y, col, 1, 'r');
@@ -1574,7 +1618,8 @@ window.addEventListener('pointerdown', e => {
   try { cv.focus({ preventScroll: true }); } catch (_) {}
   const p = toLogical(e);
   if (inBtn(p, BTN.mute)) return; // handled on click
-  if (G.state === 'title') { startGame(); return; }
+  if (G.state === 'board') return; // BACK is handled on click
+  if (G.state === 'title') { if (!inBtn(p, BTN.board)) startGame(); return; } // LEADERBOARD: on click
   if (G.state === 'paused') { G.state = 'play'; return; }
   if (G.state === 'over') return; // buttons on click
   ctrl = 'ptr';
@@ -1595,6 +1640,8 @@ window.addEventListener('click', e => {
   const p = toLogical(e);
   if (e.target === nameIn) return;
   if (inBtn(p, BTN.mute)) { muted = !muted; return; }
+  if (G.state === 'title' && inBtn(p, BTN.board)) { openBoard(); return; }
+  if (G.state === 'board' && inBtn(p, BTN.back)) { closeBoard(); return; }
   if (G.state === 'over' && G.overT > 0.8) {
     if (nameIn.style.display === 'block' && inBtn(p, BTN.save)) lbSubmit();
     else if (inBtn(p, BTN.share)) share();
@@ -1617,6 +1664,11 @@ window.addEventListener('keydown', e => {
     const off = crt.classList.toggle('off');
     try { localStorage.setItem('fb-crt', off ? 'off' : 'on'); } catch (_) {}
   }
+  if (G.state === 'board') { // any of these go back to the title
+    if ([' ', 'Enter', 'Escape', 'Backspace', 'l', 'L'].includes(k)) { e.preventDefault(); closeBoard(); }
+    return;
+  }
+  if ((k === 'l' || k === 'L') && G.state === 'title') { openBoard(); return; }
   if (k === ' ' || k === 'Enter') {
     if (G.state === 'title') startGame();
     else if (G.state === 'over' && G.overT > 0.8) startGame();
